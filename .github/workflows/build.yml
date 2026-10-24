@@ -32,8 +32,13 @@ jobs:
           PKFORGE_ANDROID_KEYSTORE_BASE64: ${{ secrets.PKFORGE_ANDROID_KEYSTORE_BASE64 }}
           EXPECTED_CERT_SHA256: ${{ vars.PKFORGE_RELEASE_CERT_SHA256 }}
         run: |
-          if [[ -z "$EXPECTED_CERT_SHA256" ]]; then
+          expected="${EXPECTED_CERT_SHA256//[[:space:]]/}"
+          if [[ -z "$expected" ]]; then
             echo "Repository variable PKFORGE_RELEASE_CERT_SHA256 is empty. Set it to the release certificate's SHA-256 fingerprint before tagging."
+            exit 1
+          fi
+          if [[ ! "$expected" =~ ^([0-9A-F]{2}:){31}[0-9A-F]{2}$ ]]; then
+            echo "PKFORGE_RELEASE_CERT_SHA256 must be the SHA-256 exactly as keytool prints it: uppercase hex pairs separated by colons (AA:BB:...), 32 bytes."
             exit 1
           fi
           if [[ -z "$PKFORGE_ANDROID_KEYSTORE_BASE64" ]]; then
@@ -92,14 +97,25 @@ jobs:
         env:
           EXPECTED_CERT_SHA256: ${{ vars.PKFORGE_RELEASE_CERT_SHA256 }}
         run: |
-          expected="$EXPECTED_CERT_SHA256"
+          expected="${EXPECTED_CERT_SHA256//[[:space:]]/}"
           if [[ -z "$expected" ]]; then
             echo "Repository variable PKFORGE_RELEASE_CERT_SHA256 is empty. Set it to the release certificate's SHA-256 fingerprint before tagging."
             exit 1
           fi
-          actual=$(keytool -printcert -jarfile "${{ steps.apk.outputs.path }}" | tr -d '\r' | grep -m1 'SHA256:')
-          echo "$actual"
-          echo "$actual" | grep -Fq "$expected"
+          if [[ ! "$expected" =~ ^([0-9A-F]{2}:){31}[0-9A-F]{2}$ ]]; then
+            echo "PKFORGE_RELEASE_CERT_SHA256 must be the SHA-256 exactly as keytool prints it: uppercase hex pairs separated by colons (AA:BB:...), 32 bytes."
+            exit 1
+          fi
+          line=$(keytool -printcert -jarfile "${{ steps.apk.outputs.path }}" | tr -d '\r' | grep -m1 'SHA256:')
+          echo "$line"
+          actual="${line#*SHA256:}"
+          actual="${actual//[[:space:]]/}"
+          if [[ "$actual" != "$expected" ]]; then
+            echo "Signing certificate mismatch."
+            echo "  expected: $expected"
+            echo "  actual:   $actual"
+            exit 1
+          fi
       - uses: actions/upload-artifact@v4
         if: github.ref_type != 'tag'
         with:
