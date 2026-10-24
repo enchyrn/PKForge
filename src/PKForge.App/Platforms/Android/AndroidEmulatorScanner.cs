@@ -107,20 +107,6 @@ public sealed class AndroidEmulatorScanner(ISaveEngine engine) : IIncrementalEmu
             [.. state.Rejected], [.. state.Diagnostics]);
     }
 
-    /// <summary>Emulator folders whose contents can never be saves - pruned so a whole-RetroArch grant stays fast.</summary>
-    private static readonly HashSet<string> PrunedDirectories = new(StringComparer.OrdinalIgnoreCase)
-    {
-        "assets", "autoconfig", "cheats", "config", "cores", "database", "downloads", "filters",
-        "info", "logs", "overlays", "playlists", "remaps", "screenshots", "shaders", "states",
-        "system", "thumbnails", "cache", "temp", "roms", "shader_cache",
-    };
-
-    // RetroArch keeps ROMs apart from its saves folder, so skipping "roms" keeps a whole-folder
-    // grant fast. Standalone emulators (melonDS, DraStic, Pizza Boy...) save beside the ROM.
-    private static bool IsPruned(string folder, EmulatorKind kind) =>
-        PrunedDirectories.Contains(folder)
-        && (kind == EmulatorKind.RetroArch || !string.Equals(folder, "roms", StringComparison.OrdinalIgnoreCase));
-
     /// <summary>
     /// Battery saves and GCI files can be nested: RetroArch uses per-core folders,
     /// DraStic uses backup/, and Dolphin uses GC/&lt;region&gt;/Card A or Card B.
@@ -458,7 +444,7 @@ public sealed class AndroidEmulatorScanner(ISaveEngine engine) : IIncrementalEmu
             if (child.IsDirectory)
             {
                 if (diagnostic) state.Trace($"DIR name={child.Name} docId={child.DocId}");
-                if (IsPruned(child.Name, state.Kind))
+                if (EmulatorSaveHeuristics.IsPrunedDirectory(child.Name, state.Kind))
                 {
                     if (diagnostic) state.Trace($"PRUNED directory {child.Name}");
                     continue;

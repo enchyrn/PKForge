@@ -94,6 +94,23 @@ public static class EmulatorSaveHeuristics
         return string.Join('/', folders[Math.Max(0, folders.Length - 2)..]);
     }
 
+    /// <summary>
+    /// Emulator folders whose contents can never be saves - pruned so a whole-RetroArch grant stays fast.
+    /// "pokedaisy-backups" holds PokeDaisy's dated copies of saves; scanning it would list every backup as a game.
+    /// </summary>
+    private static readonly HashSet<string> PrunedDirectories = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "assets", "autoconfig", "cheats", "config", "cores", "database", "downloads", "filters",
+        "info", "logs", "overlays", "playlists", "remaps", "screenshots", "shaders", "states",
+        "system", "thumbnails", "cache", "temp", "roms", "shader_cache", "pokedaisy-backups",
+    };
+
+    // RetroArch keeps ROMs apart from its saves folder, so skipping "roms" keeps a whole-folder
+    // grant fast. Standalone emulators (melonDS, DraStic, Pizza Boy...) save beside the ROM.
+    public static bool IsPrunedDirectory(string folder, EmulatorKind kind) =>
+        PrunedDirectories.Contains(folder)
+        && (kind == EmulatorKind.RetroArch || !string.Equals(folder, "roms", StringComparison.OrdinalIgnoreCase));
+
     /// <summary>NAND/SD-structured saves are the corruption-prone write path and get extra confirmation.</summary>
     public static bool RequiresExtraCare(EmulatorKind kind) =>
         kind is EmulatorKind.Azahar or EmulatorKind.CitraMmj or EmulatorKind.Eden;
