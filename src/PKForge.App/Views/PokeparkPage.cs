@@ -721,6 +721,7 @@ public sealed class PokeparkPage : ContentPage, IPadHandler, IPadStickHandler
                 var guests = _daycare.Stays.Where(s => roster.ContainsKey(s.ResidentId)).Select(s => roster[s.ResidentId]).ToArray();
                 var egg = _daycare.Egg is { } e && roster.TryGetValue(e.First, out var first) && roster.TryGetValue(e.Second, out var second) ? (first, second) : ((ParkPokemon, ParkPokemon)?)null;
                 var writes = _park.Settings.DaycareWritesBack;
+                var pace = _park.Settings.DaycarePace;
                 var options = new List<PadOption>();
                 if (egg is { } waiting) options.Add(new PadOption("Take the egg", IconPath: "park", Detail: $"From {waiting.Item1.Name} and {waiting.Item2.Name}. {(writes ? "It goes to your Bank." : "Writing back is off: it becomes a keepsake.")}"));
                 foreach (var guest in guests)
@@ -735,6 +736,7 @@ public sealed class PokeparkPage : ContentPage, IPadHandler, IPadStickHandler
                     options.Add(new PadOption("Leave a Pokémon here", IconPath: "park", Detail: $"{guests.Length} of {PokeparkDaycareService.Capacity} places taken."));
                 options.Add(new PadOption($"Write back to saves: {(writes ? "On" : "Off")}", IconPath: "settings",
                     Detail: writes ? "EXP and eggs go back to your saves and Bank, where the game allows it. A restore point comes first." : "Everything that happens here stays in the park."));
+                options.Add(new PadOption($"Daycare pace: {pace}", IconPath: "settings", Detail: PokeparkDaycareService.PaceNote(pace)));
                 options.Add(new PadOption("How the daycare works", IconPath: "info"));
                 var note = guests.Length == 0 ? "Blissey keeps the daycare by the cabin, and Audino helps." : $"Looking after {string.Join(", ", guests.Select(g => g.Name))}.";
                 var choice = await PadMenu.ShowAsync(_host, "Blissey's daycare", note, options.ToArray());
@@ -766,9 +768,11 @@ public sealed class PokeparkPage : ContentPage, IPadHandler, IPadStickHandler
                 }
                 else if (choice.StartsWith("Write back to saves", StringComparison.Ordinal))
                     _park.SaveSettings(_park.Settings with { DaycareWritesBack = !writes });
+                else if (choice.StartsWith("Daycare pace", StringComparison.Ordinal))
+                    _park.SaveSettings(_park.Settings with { DaycarePace = PokeparkDaycareService.NextPace(pace) });
                 else if (choice == "How the daycare works")
                     await PokeparkCardOverlay.ShowDialogueAsync(_host, "Blissey's daycare",
-                        "Leave up to four Pokémon with Blissey. Each one follows its own game's daycare: up to Sun and Moon they gain EXP for every hour they stay; the Nurseries of Sword and Shield, Brilliant Diamond and Shining Pearl, and Scarlet and Violet don't train but can give eggs; Let's Go and Legends have no daycare. Two guests who could breed in their game may leave an egg, which Blissey keeps until you come for it. With writing back on, the EXP goes to the real Pokémon on pick-up and the egg goes to your Bank. The save gets a restore point first, and nothing is written if the Pokémon was changed since you left it.",
+                        "Leave up to four Pokémon with Blissey. Each one follows its own game's daycare: up to Sun and Moon they gain EXP while they stay, at the daycare pace you choose; the Nurseries of Sword and Shield, Brilliant Diamond and Shining Pearl, and Scarlet and Violet don't train but can give eggs; Let's Go and Legends have no daycare. Two guests who could breed in their game may leave an egg, which Blissey keeps until you come for it. With writing back on, the EXP goes to the real Pokémon on pick-up and the egg goes to your Bank. The save gets a restore point first, and nothing is written if the Pokémon was changed since you left it.",
                         () => _walking.GetPortrait(242, 0, false, "Normal"));
             }
         }

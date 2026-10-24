@@ -11,7 +11,7 @@ namespace PKForge.App.Services;
 public sealed record ParkStay(string ResidentId, DateTimeOffset Since, string? Fingerprint);
 
 /// <summary>
-/// The Poképark daycare against the player's real Pokémon. A stay earns EXP by the hour, as far as
+/// The Poképark daycare against the player's real Pokémon. A stay earns EXP at the chosen pace, as far as
 /// the Pokémon's own game allows (<see cref="ParkDaycareService"/>); on pick-up the EXP goes back
 /// to its save slot or Bank entry when the player allows it and the Pokémon has not changed since.
 /// Eggs from two guests go to the Bank. With write-back off, everything stays in the park.
@@ -20,9 +20,6 @@ public sealed class PokeparkDaycareService(PokeparkService park, IBankService ba
 {
     private const string Key = "pkforge.pokepark.daycare.v1";
     public const int Capacity = 4;
-
-    /// <summary>EXP per hour of stay: about a walk's worth of steps.</summary>
-    public const uint ExpPerHour = 500;
 
     private sealed record State(ParkStay[] Stays, string[]? Egg);
 
@@ -45,6 +42,24 @@ public sealed class PokeparkDaycareService(PokeparkService park, IBankService ba
 
     public static bool WritesBack(PokeparkSettings settings) => settings.DaycareWritesBack;
 
+    /// <summary>What a daycare pace means for a guest, in words.</summary>
+    public static string PaceNote(DaycarePace pace) => pace switch
+    {
+        DaycarePace.Off => "Daycare pace is Off: it won't gain EXP here.",
+        DaycarePace.Slow => "It will grow about a level a day.",
+        DaycarePace.Gentle => "It will grow about a level every 8 hours.",
+        _ => "It will grow a little for every hour it stays."
+    };
+
+    /// <summary>The next pace in the cycle Off, Slow, Gentle, Original, then Off again.</summary>
+    public static DaycarePace NextPace(DaycarePace pace) => pace switch
+    {
+        DaycarePace.Off => DaycarePace.Slow,
+        DaycarePace.Slow => DaycarePace.Gentle,
+        DaycarePace.Gentle => DaycarePace.Original,
+        _ => DaycarePace.Off
+    };
+
     /// <summary>Leaves a resident at the daycare.</summary>
     public string CheckIn(ParkPokemon mon)
     {
@@ -57,7 +72,7 @@ public sealed class PokeparkDaycareService(PokeparkService park, IBankService ba
         var note = rules switch
         {
             null => "Its save is not open, so whatever it learns here stays in the park.",
-            { Grows: true } => "It will grow a little for every hour it stays.",
+            { Grows: true } => PaceNote(park.Settings.DaycarePace),
             { Breeds: true } => "Its game has a Nursery, not a daycare: it won't gain EXP, but it may find a partner.",
             _ => "Its game has no daycare, so this is a holiday: no EXP, no eggs."
         };
@@ -70,7 +85,8 @@ public sealed class PokeparkDaycareService(PokeparkService park, IBankService ba
         if (Load().Stays.FirstOrDefault(s => s.ResidentId == mon.Id) is not { } stay) return (TimeSpan.Zero, null);
         var time = DateTimeOffset.Now - stay.Since;
         var source = park.SourceOf(mon);
-        return (time, source is null ? null : ParkDaycareService.Preview(source.Data, source.Format, Exp(time)));
+        return (time, source is null ? null : ParkDaycareService.Preview(source.Data, source.Format,
+            ParkDaycareService.ExpForStay(source.Data, source.Format, time, park.Settings.DaycarePace)));
     }
 
     /// <summary>Picks a resident up. The EXP goes back to the real Pokémon when allowed.</summary>
@@ -80,7 +96,7 @@ public sealed class PokeparkDaycareService(PokeparkService park, IBankService ba
         if (state.Stays.FirstOrDefault(s => s.ResidentId == mon.Id) is not { } stay) return $"{mon.Name} is not at the daycare.";
         var time = DateTimeOffset.Now - stay.Since;
         var stayed = Duration(time);
-        var message = await GrowAsync(mon, stay, Exp(time), stayed);
+        var message = await GrowAsync(mon, stay, time, stayed);
         var left = Load();
         Save(left with { Stays = left.Stays.Where(s => s.ResidentId != mon.Id).ToArray(), Egg = left.Egg is { } egg && egg.Contains(mon.Id) ? null : left.Egg });
         return message;
@@ -93,13 +109,14 @@ public sealed class PokeparkDaycareService(PokeparkService park, IBankService ba
         Save(state with { Stays = state.Stays.Where(s => s.ResidentId != id).ToArray(), Egg = state.Egg is { } egg && egg.Contains(id) ? null : state.Egg });
     }
 
-    private async Task<string> GrowAsync(ParkPokemon mon, ParkStay stay, uint exp, string stayed)
+    private async Task<string> GrowAsync(ParkPokemon mon, ParkStay stay, TimeSpan time, string stayed)
     {
         var settings = park.Settings;
         var source = park.SourceOf(mon);
         var hello = $"Blissey brings {mon.Name} back. It stayed {stayed}.";
         if (source is null) return $"{hello} Its save is not open, so the time it spent here stays a park memory.";
         var rules = ParkDaycareService.RulesFor(source.Data, source.Format);
+        var exp = ParkDaycareService.ExpForStay(source.Data, source.Format, time, settings.DaycarePace);
         if (!rules.Grows) return $"{hello} {(rules.Breeds ? "Its game has a Nursery, which doesn't train" : "Its game has no daycare")}, so it comes back as it was, only happier.";
         var preview = ParkDaycareService.Preview(source.Data, source.Format, exp);
         var grew = preview.LevelAfter > preview.LevelBefore ? $"from level {preview.LevelBefore} to {preview.LevelAfter}" : $"by {preview.ExpGained} EXP";
@@ -150,8 +167,6 @@ public sealed class PokeparkDaycareService(PokeparkService park, IBankService ba
         var entry = bank.Add(egg.Data, info);
         return $"Blissey hands you the egg, warm from the sun. It's in your Bank, box {entry.Box + 1}, slot {entry.Slot + 1}.";
     }
-
-    private static uint Exp(TimeSpan time) => (uint)Math.Min(uint.MaxValue / 4, Math.Max(0, time.TotalHours) * ExpPerHour);
 
     private static string Duration(TimeSpan time) => time.TotalHours switch
     {

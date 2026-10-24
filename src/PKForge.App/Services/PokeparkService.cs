@@ -2,6 +2,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using PKForge.Domain;
+using PKForge.Engine;
 
 namespace PKForge.App.Services;
 
@@ -16,6 +17,8 @@ public sealed record PokeparkSettings
     public string[] SelectedIds { get; init; } = [];
     /// <summary>The daycare writes EXP and eggs back to saves and the Bank, where the game allows it.</summary>
     public bool DaycareWritesBack { get; init; } = true;
+    /// <summary>How fast a stay at the daycare grows a Pokémon (default: about a level every 8 hours).</summary>
+    public DaycarePace DaycarePace { get; init; } = DaycarePace.Gentle;
 }
 
 public sealed class PokeparkService(IBankService bank, ISaveSessionService saves, IGameDataService data)
@@ -315,6 +318,7 @@ public sealed class PokeparkService(IBankService bank, ISaveSessionService saves
     private static PokeparkSettings Normalize(PokeparkSettings settings) => settings with
     {
         Source = Enum.IsDefined(settings.Source) ? settings.Source : PokeparkSource.Both,
+        DaycarePace = Enum.IsDefined(settings.DaycarePace) ? settings.DaycarePace : DaycarePace.Gentle,
         Count = Math.Clamp(settings.Count, 1, MaximumResidents),
         SelectedIds = (settings.SelectedIds ?? []).Where(id => !string.IsNullOrWhiteSpace(id)).Distinct().Take(MaximumResidents).ToArray()
     };
