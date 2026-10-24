@@ -17,7 +17,7 @@ public enum DaycarePace { Off, Slow, Gentle, Original }
 
 /// <summary>
 /// The Poképark daycare against real Pokémon data, following each game's own daycare: Gen 1–7
-/// daycares give EXP (one point a step in the games, here a steady amount per hour), the
+/// daycares give EXP (one point a step in the games, here a level or a flat amount per hour depending on the <see cref="DaycarePace"/>), the
 /// Nurseries of Sword/Shield, Brilliant Diamond/Shining Pearl and Scarlet/Violet only give eggs,
 /// and Let's Go and Legends have neither. Levels are written as exact EXP, stats recalculated,
 /// moves and evolution left alone (as in the games). Eggs are PKHeX egg encounters, made for the

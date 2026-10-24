@@ -23,7 +23,7 @@ public enum AppUpdateInstallResult
 /// <summary>Pure release-channel rules. Network and platform services stay in the app layer.</summary>
 public static class AppUpdateRules
 {
-    /// <summary>Standard release tags are vMAJOR.MINOR.PATCH; build metadata is ignored.</summary>
+    /// <summary>Release tags are vMAJOR.MINOR.PATCH with an optional SemVer prerelease (such as -fork.1); build metadata is ignored and a prerelease sorts below its release.</summary>
     public static bool IsNewerVersion(string installed, string candidate)
     {
         if (!TryParse(installed, out var current) || !TryParse(candidate, out var next))
@@ -73,8 +73,8 @@ public static class AppUpdateRules
         var plus = text.IndexOf('+');
         if (plus >= 0)
             text = text[..plus];
-        // PKForge release tags are stable SemVer. Strip prerelease metadata if a future
-        // tag carries it rather than treating the whole tag as incomparable.
+        // Split off the prerelease (fork tags carry one, e.g. 3.1.1-fork.1); it is kept
+        // and compared by IsNewerVersion rather than discarded.
         var dash = text.IndexOf('-');
         if (dash >= 0)
         {

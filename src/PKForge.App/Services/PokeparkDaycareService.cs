@@ -120,7 +120,10 @@ public sealed class PokeparkDaycareService(PokeparkService park, IBankService ba
         if (!rules.Grows) return $"{hello} {(rules.Breeds ? "Its game has a Nursery, which doesn't train" : "Its game has no daycare")}, so it comes back as it was, only happier.";
         var preview = ParkDaycareService.Preview(source.Data, source.Format, exp);
         var grew = preview.LevelAfter > preview.LevelBefore ? $"from level {preview.LevelBefore} to {preview.LevelAfter}" : $"by {preview.ExpGained} EXP";
-        if (preview.ExpGained == 0) return $"{hello} It is already as strong as it can get.";
+        if (preview.ExpGained == 0)
+            return preview.LevelBefore >= 100 ? $"{hello} It is already as strong as it can get."
+                : settings.DaycarePace == DaycarePace.Off ? $"{hello} Daycare pace is Off, so it comes back as it was."
+                : $"{hello} It wasn't here long enough to grow.";
         if (!WritesBack(settings)) return $"{hello} It grew {grew} here. Writing back is off, so that stays in the park.";
         if (stay.Fingerprint is null || stay.Fingerprint != Fingerprint(source.Data))
             return $"{hello} It grew {grew} here, but it was changed in its save since you left it, so the daycare leaves it alone.";
