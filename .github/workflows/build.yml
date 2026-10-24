@@ -69,6 +69,24 @@ jobs:
           apk=$(find src/PKForge.App/bin -name '*-Signed.apk' | head -1)
           echo "path=$apk" >> "$GITHUB_OUTPUT"
           echo "name=PKForge-Fork-${GITHUB_REF_NAME}.apk" >> "$GITHUB_OUTPUT"
+      - name: Verify APK package and launcher label
+        env:
+          APK_PATH: ${{ steps.apk.outputs.path }}
+        run: |
+          # ApplicationTitle only reaches android:label when the manifest template has none,
+          # so check what the built APK really declares.
+          sdk="${ANDROID_HOME:-$ANDROID_SDK_ROOT}"
+          aapt2=$(find "$sdk/build-tools" -name aapt2 -type f 2>/dev/null | sort -V | tail -1)
+          if [[ -z "$aapt2" ]]; then
+            echo "aapt2 not found under '$sdk/build-tools'; cannot check the APK label."
+            exit 1
+          fi
+          badging=$("$aapt2" dump badging "$APK_PATH")
+          echo "$badging" | grep -E "^(package:|application-label:)"
+          echo "$badging" | grep -Fq "package: name='io.github.gabzidevs.pkforge'" \
+            || { echo "APK package is not io.github.gabzidevs.pkforge."; exit 1; }
+          echo "$badging" | grep -Fxq "application-label:'PKForge Fork'" \
+            || { echo "APK application label is not 'PKForge Fork'."; exit 1; }
       - name: Verify permanent release signature
         if: github.ref_type == 'tag'
         env:
