@@ -17,6 +17,19 @@ public sealed class AppUpdateRulesTests
     public void ComparesStableReleaseTags(string installed, string candidate, bool expected) =>
         Assert.Equal(expected, AppUpdateRules.IsNewerVersion(installed, candidate));
 
+    [Theory]
+    [InlineData("3.1.1-fork.1", "v3.1.1-fork.1", false)] // the installed fork release is not an update to itself
+    [InlineData("3.1.1-fork.1", "v3.1.1-fork.2", true)]
+    [InlineData("3.1.1-fork.2", "v3.1.1-fork.1", false)]
+    [InlineData("3.1.1-fork.9", "v3.1.1-fork.10", true)] // dotted numeric identifiers compare as numbers
+    [InlineData("3.1.1-fork.10", "v3.1.1-fork.9", false)]
+    [InlineData("3.1.1-fork.1", "v3.2.0-fork.1", true)]
+    [InlineData("3.1.1-fork.7", "v3.2.0-fork.1", true)]
+    [InlineData("3.1.1-fork.1", "v3.1.2", true)] // upstream-style tag
+    [InlineData("3.1.1-fork.1", "v3.1.0-fork.5", false)]
+    public void ComparesForkReleaseTags(string installed, string candidate, bool expected) =>
+        Assert.Equal(expected, AppUpdateRules.IsNewerVersion(installed, candidate));
+
     [Fact]
     public void SkippedReleaseDoesNotPromptButNewerReleaseDoes()
     {

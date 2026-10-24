@@ -14,7 +14,7 @@ namespace PKForge.App.Services;
 /// Auto-check failures stay silent; manual checks surface their error in the status bar.</summary>
 public sealed class AppUpdateService
 {
-    private const string LatestUrl = "https://api.github.com/repos/sofianeelhor/PKForge/releases/latest";
+    private const string LatestUrl = "https://api.github.com/repos/gabzidevs/PKForge/releases/latest";
     private const string SkippedVersionKey = "update_skipped_version";
     private static readonly HttpClient Http = new(new SocketsHttpHandler
     {
@@ -37,7 +37,7 @@ public sealed class AppUpdateService
         using var request = new HttpRequestMessage(HttpMethod.Get, LatestUrl);
         request.Headers.Accept.ParseAdd("application/vnd.github+json");
         request.Headers.Add("X-GitHub-Api-Version", "2022-11-28");
-        request.Headers.UserAgent.ParseAdd($"PKForge/{AppInfo.Current.VersionString} (+https://github.com/sofianeelhor/PKForge)");
+        request.Headers.UserAgent.ParseAdd($"PKForge/{AppInfo.Current.VersionString} (+https://github.com/gabzidevs/PKForge)");
 
         using var response = await Http.SendAsync(request, checkTimeout.Token).ConfigureAwait(false);
         response.EnsureSuccessStatusCode();
@@ -210,9 +210,9 @@ public sealed class AppUpdateService
 [Android.Content.BroadcastReceiver(Enabled = true, Exported = false)]
 public sealed class UpdateInstallReceiver : Android.Content.BroadcastReceiver
 {
-    public const string ActionName = "org.pkforge.app.UPDATE_INSTALL_RESULT";
-    public const string ExtraApkPath = "org.pkforge.app.UPDATE_APK";
-    public const string ExtraAskedUser = "org.pkforge.app.UPDATE_ASKED_USER";
+    public const string ActionName = "io.github.gabzidevs.pkforge.UPDATE_INSTALL_RESULT";
+    public const string ExtraApkPath = "io.github.gabzidevs.pkforge.UPDATE_APK";
+    public const string ExtraAskedUser = "io.github.gabzidevs.pkforge.UPDATE_ASKED_USER";
     public const int RequestCode = 4701;
 
     /// <summary>Raised on the main thread when Android refused the update even with its own

@@ -2,7 +2,7 @@ name: build
 
 on:
   push:
-    branches: [main]
+    branches: [main, 'gabzi/**']
     tags: ['v*']
   pull_request:
 
@@ -30,7 +30,12 @@ jobs:
         if: github.ref_type == 'tag'
         env:
           PKFORGE_ANDROID_KEYSTORE_BASE64: ${{ secrets.PKFORGE_ANDROID_KEYSTORE_BASE64 }}
+          EXPECTED_CERT_SHA256: ${{ vars.PKFORGE_RELEASE_CERT_SHA256 }}
         run: |
+          if [[ -z "$EXPECTED_CERT_SHA256" ]]; then
+            echo "Repository variable PKFORGE_RELEASE_CERT_SHA256 is empty. Set it to the release certificate's SHA-256 fingerprint before tagging."
+            exit 1
+          fi
           if [[ -z "$PKFORGE_ANDROID_KEYSTORE_BASE64" ]]; then
             echo "Permanent release signing secret is missing."
             exit 1
@@ -63,11 +68,17 @@ jobs:
         run: |
           apk=$(find src/PKForge.App/bin -name '*-Signed.apk' | head -1)
           echo "path=$apk" >> "$GITHUB_OUTPUT"
-          echo "name=PKForge-${GITHUB_REF_NAME}.apk" >> "$GITHUB_OUTPUT"
+          echo "name=PKForge-Fork-${GITHUB_REF_NAME}.apk" >> "$GITHUB_OUTPUT"
       - name: Verify permanent release signature
         if: github.ref_type == 'tag'
+        env:
+          EXPECTED_CERT_SHA256: ${{ vars.PKFORGE_RELEASE_CERT_SHA256 }}
         run: |
-          expected="E2:6F:3F:FF:8A:89:00:D8:5E:D8:EF:72:E1:CA:7F:50:33:D2:A5:57:98:0B:26:19:F1:1D:6D:E2:10:09:BF:D8"
+          expected="$EXPECTED_CERT_SHA256"
+          if [[ -z "$expected" ]]; then
+            echo "Repository variable PKFORGE_RELEASE_CERT_SHA256 is empty. Set it to the release certificate's SHA-256 fingerprint before tagging."
+            exit 1
+          fi
           actual=$(keytool -printcert -jarfile "${{ steps.apk.outputs.path }}" | tr -d '\r' | grep -m1 'SHA256:')
           echo "$actual"
           echo "$actual" | grep -Fq "$expected"
@@ -79,10 +90,10 @@ jobs:
           retention-days: 3
       - name: Stage release asset
         if: github.ref_type == 'tag'
-        run: cp "${{ steps.apk.outputs.path }}" "PKForge-${GITHUB_REF_NAME}.apk"
+        run: cp "${{ steps.apk.outputs.path }}" "PKForge-Fork-${GITHUB_REF_NAME}.apk"
       - name: Release
         if: github.ref_type == 'tag'
         uses: softprops/action-gh-release@v2
         with:
-          files: PKForge-${{ github.ref_name }}.apk
+          files: PKForge-Fork-${{ github.ref_name }}.apk
           generate_release_notes: true

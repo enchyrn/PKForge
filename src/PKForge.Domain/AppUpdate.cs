@@ -33,7 +33,31 @@ public static class AppUpdateRules
             return core > 0;
         if (next.Prerelease.Length == 0 || current.Prerelease.Length == 0)
             return next.Prerelease.Length == 0 && current.Prerelease.Length != 0;
-        return string.CompareOrdinal(next.Prerelease, current.Prerelease) > 0;
+        return ComparePrerelease(next.Prerelease, current.Prerelease) > 0;
+    }
+
+    /// <summary>SemVer precedence for prerelease tags such as fork.9 vs fork.10: dot-separated
+    /// identifiers compare left to right, numeric ones as numbers (and below alphanumeric ones),
+    /// and a shorter run loses to a longer one that starts the same.</summary>
+    private static int ComparePrerelease(string left, string right)
+    {
+        var a = left.Split('.');
+        var b = right.Split('.');
+        for (var i = 0; i < Math.Min(a.Length, b.Length); i++)
+        {
+            var aNumeric = ulong.TryParse(a[i], out var aNumber);
+            var bNumeric = ulong.TryParse(b[i], out var bNumber);
+            var order = (aNumeric, bNumeric) switch
+            {
+                (true, true) => aNumber.CompareTo(bNumber),
+                (true, false) => -1,
+                (false, true) => 1,
+                _ => string.CompareOrdinal(a[i], b[i]),
+            };
+            if (order != 0)
+                return order;
+        }
+        return a.Length.CompareTo(b.Length);
     }
 
     /// <summary>Don't-remind-me applies to one release. A newer release always asks again.</summary>
