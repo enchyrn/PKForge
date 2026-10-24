@@ -5,7 +5,7 @@ Personal fork of [PKForge](https://github.com/sofianeelhor/PKForge) at https://g
 ## Why the fork exists
 
 1. **The daycare was too fast.** The Poképark daycare gave a flat 500 EXP per hour of real time. A starter went from level 5 to 13 in about 2 hours, which made the daycare a cheat rather than something that fits the game.
-2. **PokeDaisy backups showed up as games.** PokeDaisy writes up to 10 dated copies of each save into a `pokedaisy-backups` subfolder (`<game>.backup-<yyyyMMdd-HHmmss>.<ext>`). PKForge's scanner recursed into it and listed every backup as its own game, so the same Pokémon appeared several times in the Living Dex.
+2. **PokeDaisy backups showed up as games.** Per PokeDaisy's source (`SaveBackups.kt`, `KEEP = 10`), PokeDaisy writes up to 10 dated copies of each save into a `pokedaisy-backups` subfolder (`<game>.backup-<yyyyMMdd-HHmmss>.<ext>`). PKForge's scanner recursed into it and listed every backup as its own game, so the same Pokémon appeared several times in the Living Dex.
 
 ## What changed, and where
 
@@ -19,7 +19,7 @@ Personal fork of [PKForge](https://github.com/sofianeelhor/PKForge) at https://g
 
 **`pokedaisy-backups` is never scanned**
 
-- `EmulatorSaveHeuristics.IsPrunedDirectory` in `src/PKForge.Infrastructure/EmulatorSaveHeuristics.cs` now owns the pruned-folder list (moved out of `AndroidEmulatorScanner`), with `pokedaisy-backups` added. It applies to every emulator kind and is case-insensitive.
+- `EmulatorSaveHeuristics.IsPrunedDirectory` in `src/PKForge.Infrastructure/EmulatorSaveHeuristics.cs` now owns the pruned-folder list (moved out of `AndroidEmulatorScanner`), with `pokedaisy-backups` added. Only `pokedaisy-backups` applies to every emulator kind (`roms` is still pruned for RetroArch only); matching is case-insensitive.
 - Tests: `tests/PKForge.Domain.Tests/EmulatorSaveHeuristicsTests.cs`.
 
 **Fork identity**
@@ -36,15 +36,15 @@ Sprite-pack downloads are unchanged and still use upstream's release assets.
 
 CI is `.github/workflows/build.yml`.
 
-- **Pushes to `main` and `gabzi/**`, and pull requests:** run both test suites and build an unsigned debug APK, kept as the `pkforge-apk` artifact for 3 days. This is how App changes get compile-checked, since the MAUI project can't be built locally.
+- **Pushes to `main` and `gabzi/**`, and pull requests:** run both test suites and build a debug APK (signed with the debug key), kept as the `pkforge-apk` artifact for 3 days. This is how App changes get compile-checked, since the MAUI project can't be built locally.
 - **Tags `v*`** (for example `v3.1.1-fork.1`): run the tests, build a signed Release APK, check it, and publish a GitHub Release with the asset `PKForge-Fork-<tag>.apk` (one APK per release, so Obtainium needs no filters). The checks are:
   - The build fails if the repo variable `PKFORGE_RELEASE_CERT_SHA256` is empty, and again if the APK's signing certificate doesn't match it.
-  - `aapt2` must report package `io.github.gabzidevs.pkforge` and label `PKForge Fork`.
+  - `aapt2` must report package `io.github.gabzidevs.pkforge` and label `PKForge Fork`. This check runs on every build, not only tags.
 
 Signing setup, in the repo's Actions settings:
 
 - Secrets: `PKFORGE_ANDROID_KEYSTORE_BASE64` (the PKCS12 keystore, base64), `PKFORGE_ANDROID_KEYSTORE_PASSWORD`, `PKFORGE_ANDROID_KEY_ALIAS`, `PKFORGE_ANDROID_KEY_PASSWORD`.
-- Variable: `PKFORGE_RELEASE_CERT_SHA256`, the certificate's SHA-256 fingerprint.
+- Variable: `PKFORGE_RELEASE_CERT_SHA256`, the certificate's SHA-256 fingerprint exactly as `keytool -list -v` or `keytool -printcert` prints it: uppercase hex, colon-separated (`AA:BB:...`), 32 bytes. The workflow rejects any other form.
 
 Keep a backup of the keystore and its passwords somewhere safe, outside the repo. Android only installs an update signed with the same key as the installed app; if the key is lost, every installed copy has to be uninstalled (and its data lost) before a new key can be used.
 
@@ -55,8 +55,9 @@ Status: the first signed release has not been built yet, so the tag workflow (si
 ## Syncing with upstream
 
 ```sh
+git config remote.upstream.tagOpt --no-tags   # once: keep upstream's v* tags out of this repo
 git fetch upstream
 git merge upstream/main
 ```
 
-The upstream remote is fetch-only (its push URL is set to `DISABLED`). Expect conflicts in the files listed above, mainly `PKForge.App.csproj`, `AppUpdateService.cs`, `build.yml` and `PokeparkPage.cs`. Run both test suites after merging (commands in the repo's `CLAUDE.md`).
+The upstream remote is fetch-only (its push URL is set to `DISABLED`). The `--no-tags` setting matters because a later `git push --tags` would otherwise push upstream's `v*` tags to the fork and trigger failing release builds. Expect conflicts in the files listed above, mainly `PKForge.App.csproj`, `AppUpdateService.cs`, `build.yml` and `PokeparkPage.cs`. Run both test suites after merging (commands in the repo's `CLAUDE.md`).

@@ -2,11 +2,11 @@
 
 This is a personal fork of PKForge, kept for playing Pokémon Emerald in PokeDaisy with PKForge as the companion. It changes three things:
 
-- **Daycare pace.** Blissey's daycare grows a Pokémon by levels instead of a flat 500 EXP an hour. The default is about a level every 8 hours; Off, Slow (a level a day) and Original (the old flat rate) are one tap away in Blissey's menu.
+- **Daycare pace.** Blissey's daycare grows a Pokémon by levels instead of a flat 500 EXP an hour. The default is about a level every 8 hours; Off, Slow (a level a day) and Original (the old flat rate) are in Blissey's menu, where one row cycles Off, Slow, Gentle, Original.
 - **PokeDaisy backups are skipped.** The scanner no longer reads PokeDaisy's `pokedaisy-backups` folder, so old backups don't show up as extra games or duplicate your Living Dex.
 - **It installs beside the official app.** Own app ID (`io.github.gabzidevs.pkforge`), own name ("PKForge Fork"), and update checks against this fork's releases.
 
-Because it installs beside the official app, it starts with empty app data: your Bank and Poképark are not shared. Open your saves again from the linked emulator folders.
+Because it installs beside the official app, it starts with empty app data: your Bank and Poképark are not shared. Link your emulator folders again to get your saves back in.
 
 **Install:** download the APK from the [latest release](https://github.com/gabzidevs/PKForge/releases/latest), or add the repo to [Obtainium](https://github.com/ImranR98/Obtainium) and let it track releases:
 
