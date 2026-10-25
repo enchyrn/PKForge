@@ -1,6 +1,6 @@
 # PKForge Fork
 
-Personal fork of [PKForge](https://github.com/sofianeelhor/PKForge) at https://github.com/gabzidevs/PKForge (upstream: `sofianeelhor/PKForge`). It exists to fix two things for the owner's Emerald setup (PokeDaisy on Android, PKForge as the companion). Where it's going next is in [ROADMAP.md](ROADMAP.md). The plan behind this first round of changes is [`docs/superpowers/plans/2026-10-24-fork-daycare-pace-and-release.md`](../superpowers/plans/2026-10-24-fork-daycare-pace-and-release.md).
+Personal fork of [PKForge](https://github.com/sofianeelhor/PKForge) at https://github.com/enchyrn/PKForge (upstream: `sofianeelhor/PKForge`). It exists to fix two things for the owner's Emerald setup (PokeDaisy on Android, PKForge as the companion). Where it's going next is in [ROADMAP.md](ROADMAP.md). The plan behind this first round of changes is [`docs/superpowers/plans/2026-10-24-fork-daycare-pace-and-release.md`](../superpowers/plans/2026-10-24-fork-daycare-pace-and-release.md).
 
 ## Why the fork exists
 
@@ -29,8 +29,9 @@ Personal fork of [PKForge](https://github.com/sofianeelhor/PKForge) at https://g
 **Fork identity**
 
 - `src/PKForge.App/PKForge.App.csproj`: app ID `io.github.gabzidevs.pkforge` (diagnostic build `...pkforge.debug`, titled "PKForge Fork Diagnostics"), title "PKForge Fork", version `3.1.1-fork.1`, version code `312`.
+- The repo moved from `gabzidevs/PKForge` to `enchyrn/PKForge` on 2026-10-26 (GitHub redirects the old URLs). The app ID keeps `gabzidevs`: changing it would make Android treat the fork as a new app, unable to update the installed one.
 - `AndroidManifest.xml` no longer hard-codes `android:label`; the build writes `ApplicationTitle` there.
-- `AppUpdateService` checks `https://api.github.com/repos/gabzidevs/PKForge/releases/latest`. Its broadcast action/extra names use the fork's ID so the two installed apps never answer each other.
+- `AppUpdateService` checks `https://api.github.com/repos/enchyrn/PKForge/releases/latest`. Its broadcast action/extra names use the fork's ID so the two installed apps never answer each other.
 - `src/PKForge.Domain/AppUpdate.cs`: prerelease comparison now follows SemVer (`fork.10` is newer than `fork.9`); before, it compared as plain text. Tests are in `tests/PKForge.Domain.Tests/AppUpdateRulesTests.cs`.
 - `AboutPopup` keeps the upstream credit and adds a line for the fork.
 

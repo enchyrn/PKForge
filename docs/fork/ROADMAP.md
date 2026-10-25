@@ -1,6 +1,6 @@
 # Roadmap
 
-The brainstorm about where this goes next moved to the PokeDaisy fork on 2026-10-26, once PokeDaisy became the hub: [gabzidevs/pokedaisy `docs/fork/ROADMAP.md`](https://github.com/gabzidevs/pokedaisy/blob/main/docs/fork/ROADMAP.md). For this fork itself see [README.md](README.md).
+The brainstorm about where this goes next moved to the PokeDaisy fork on 2026-10-26, once PokeDaisy became the hub: [enchyrn/pokedaisy `docs/fork/ROADMAP.md`](https://github.com/enchyrn/pokedaisy/blob/main/docs/fork/ROADMAP.md). For this fork itself see [README.md](README.md).
 
 What it means for PKForge:
 

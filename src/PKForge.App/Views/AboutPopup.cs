@@ -75,7 +75,7 @@ public static class AboutPopup
                 Small("Engine PKHeX · chrome PKSM (GPL-3)"),
                 Small("Sprites © Nintendo · Creatures · Game Freak"),
                 Small("github.com/sofianeelhor/pkforge", UiTokens.MenuBlue),
-                Small("Fork: github.com/gabzidevs/PKForge", UiTokens.MenuBlue),
+                Small("Fork: github.com/enchyrn/PKForge", UiTokens.MenuBlue),
                 new HorizontalStackLayout { Spacing = 8, HorizontalOptions = LayoutOptions.End, Children = { close } },
             },
         };

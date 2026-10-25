@@ -11,7 +11,7 @@
 # It never prints the keystore, and refuses to replace an existing one unless FORCE=1.
 set -euo pipefail
 
-REPO="${REPO:-gabzidevs/PKForge}"
+REPO="${REPO:-enchyrn/PKForge}"
 ALIAS="pkforge-fork-diagnostic"
 DNAME="CN=PKForge Fork Diagnostics, O=gabzidevs"
 VALIDITY_DAYS=10000

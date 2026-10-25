@@ -17,7 +17,7 @@
 # overwrite the keystore secret on GitHub.
 set -euo pipefail
 
-REPO="${REPO:-gabzidevs/PKForge}"
+REPO="${REPO:-enchyrn/PKForge}"
 ITEM_NAME="${ITEM_NAME:-PKForge Fork release key}"
 ALIAS="pkforge-fork"
 DNAME="CN=PKForge Fork, O=gabzidevs"

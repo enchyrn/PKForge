@@ -1,6 +1,6 @@
 # PKForge Fork
 
-This is the owner's personal fork (https://github.com/gabzidevs/PKForge) of sofianeelhor/PKForge. Read `docs/fork/README.md` for why it exists and what changed, and `docs/fork/ROADMAP.md` for the decisions and ideas about where it goes next.
+This is the owner's personal fork (https://github.com/enchyrn/PKForge) of sofianeelhor/PKForge. Read `docs/fork/README.md` for why it exists and what changed, and `docs/fork/ROADMAP.md` for the decisions and ideas about where it goes next.
 
 - Never push to upstream. The `upstream` remote is fetch-only; push to `origin`.
 - Tests (`dotnet` is only available through mise):

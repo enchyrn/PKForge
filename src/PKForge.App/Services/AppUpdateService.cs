@@ -14,7 +14,7 @@ namespace PKForge.App.Services;
 /// Auto-check failures stay silent; manual checks surface their error in the status bar.</summary>
 public sealed class AppUpdateService
 {
-    private const string LatestUrl = "https://api.github.com/repos/gabzidevs/PKForge/releases/latest";
+    private const string LatestUrl = "https://api.github.com/repos/enchyrn/PKForge/releases/latest";
     private const string SkippedVersionKey = "update_skipped_version";
     private static readonly HttpClient Http = new(new SocketsHttpHandler
     {
@@ -37,7 +37,7 @@ public sealed class AppUpdateService
         using var request = new HttpRequestMessage(HttpMethod.Get, LatestUrl);
         request.Headers.Accept.ParseAdd("application/vnd.github+json");
         request.Headers.Add("X-GitHub-Api-Version", "2022-11-28");
-        request.Headers.UserAgent.ParseAdd($"PKForge/{AppInfo.Current.VersionString} (+https://github.com/gabzidevs/PKForge)");
+        request.Headers.UserAgent.ParseAdd($"PKForge/{AppInfo.Current.VersionString} (+https://github.com/enchyrn/PKForge)");
 
         using var response = await Http.SendAsync(request, checkTimeout.Token).ConfigureAwait(false);
         response.EnsureSuccessStatusCode();

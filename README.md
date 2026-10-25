@@ -8,9 +8,9 @@ This is a personal fork of PKForge, kept for playing Pokémon Emerald in PokeDai
 
 Because it installs beside the official app, it starts with empty app data: your Bank and Poképark are not shared. Link your emulator folders again to get your saves back in.
 
-**Install:** download the APK from the [latest release](https://github.com/gabzidevs/PKForge/releases/latest), or add the repo to [Obtainium](https://github.com/ImranR98/Obtainium) and let it track releases:
+**Install:** download the APK from the [latest release](https://github.com/enchyrn/PKForge/releases/latest), or add the repo to [Obtainium](https://github.com/ImranR98/Obtainium) and let it track releases:
 
-[![Get it on Obtainium](https://img.shields.io/badge/Obtainium-Add%20this%20fork-2B4E95)](https://apps.obtainium.imranr.dev/redirect?r=obtainium://add/https://github.com/gabzidevs/PKForge)
+[![Get it on Obtainium](https://img.shields.io/badge/Obtainium-Add%20this%20fork-2B4E95)](https://apps.obtainium.imranr.dev/redirect?r=obtainium://add/https://github.com/enchyrn/PKForge)
 
 More in [docs/fork](docs/fork/README.md). Everything below is the upstream README.
 
