@@ -22,6 +22,10 @@ Personal fork of [PKForge](https://github.com/sofianeelhor/PKForge) at https://g
 - `EmulatorSaveHeuristics.IsPrunedDirectory` in `src/PKForge.Infrastructure/EmulatorSaveHeuristics.cs` now owns the pruned-folder list (moved out of `AndroidEmulatorScanner`), with `pokedaisy-backups` added. Only `pokedaisy-backups` applies to every emulator kind (`roms` is still pruned for RetroArch only); matching is case-insensitive.
 - Tests: `tests/PKForge.Domain.Tests/EmulatorSaveHeuristicsTests.cs`.
 
+**Menu crash fix (also in upstream)**
+
+- `DsFolderButton` in `src/PKForge.App/Views/DsKit.cs`: a selected row whose label is too long scrolls it in an `async void` loop. Closing the menu mid-scroll left the loop running against the torn-down MAUI context, and the next `TranslateToAsync` threw `ObjectDisposedException: IServiceProvider`, killing the app. The row now stops the loop on `Unloaded`, the loop also ends once the label has no handler, and the disposal exception is caught. Not covered by tests (App views have no test project); found and checked on device through logcat.
+
 **Fork identity**
 
 - `src/PKForge.App/PKForge.App.csproj`: app ID `io.github.gabzidevs.pkforge` (diagnostic build `...pkforge.debug`, titled "PKForge Fork Diagnostics"), title "PKForge Fork", version `3.1.1-fork.1`, version code `312`.
