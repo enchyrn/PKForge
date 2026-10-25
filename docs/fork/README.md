@@ -24,7 +24,7 @@ Personal fork of [PKForge](https://github.com/sofianeelhor/PKForge) at https://g
 
 **Fork identity**
 
-- `src/PKForge.App/PKForge.App.csproj`: app ID `io.github.gabzidevs.pkforge` (diagnostic build `...pkforge.debug`), title "PKForge Fork", version `3.1.1-fork.1`, version code `312`.
+- `src/PKForge.App/PKForge.App.csproj`: app ID `io.github.gabzidevs.pkforge` (diagnostic build `...pkforge.debug`, titled "PKForge Fork Diagnostics"), title "PKForge Fork", version `3.1.1-fork.1`, version code `312`.
 - `AndroidManifest.xml` no longer hard-codes `android:label`; the build writes `ApplicationTitle` there.
 - `AppUpdateService` checks `https://api.github.com/repos/gabzidevs/PKForge/releases/latest`. Its broadcast action/extra names use the fork's ID so the two installed apps never answer each other.
 - `src/PKForge.Domain/AppUpdate.cs`: prerelease comparison now follows SemVer (`fork.10` is newer than `fork.9`); before, it compared as plain text. Tests are in `tests/PKForge.Domain.Tests/AppUpdateRulesTests.cs`.
@@ -36,7 +36,7 @@ Sprite-pack downloads are unchanged and still use upstream's release assets.
 
 CI is `.github/workflows/build.yml`.
 
-- **Pushes to `main` and `gabzi/**`, and pull requests:** run both test suites and build a debug APK (signed with the debug key), kept as the `pkforge-apk` artifact for 3 days. This is how App changes get compile-checked, since the MAUI project can't be built locally.
+- **Pushes to `main` and `gabzi/**`, and pull requests:** run both test suites and build a diagnostic APK (`-p:DiagnosticBuild=true`, signed with a throwaway debug key), kept as the `pkforge-apk` artifact for 3 days. This is how App changes get compile-checked, since the MAUI project can't be built locally. The diagnostic build can be sideloaded to try a branch: it embeds its assemblies (a plain Debug APK uses Fast Deployment and aborts on launch with "No assemblies found in .../.__override__") and installs as `io.github.gabzidevs.pkforge.debug`, beside the release, with its own data. Never sideload a build that uses the release app ID with a debug key: the signed release would then refuse to install over it.
 - **Tags `v*`** (for example `v3.1.1-fork.1`): run the tests, build a signed Release APK, check it, and publish a GitHub Release with the asset `PKForge-Fork-<tag>.apk` (one APK per release, so Obtainium needs no filters). The checks are:
   - The build fails if the repo variable `PKFORGE_RELEASE_CERT_SHA256` is empty, and again if the APK's signing certificate doesn't match it.
   - `aapt2` must report package `io.github.gabzidevs.pkforge` and label `PKForge Fork`. This check runs on every build, not only tags.

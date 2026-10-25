@@ -54,8 +54,11 @@ jobs:
           ANDROID_KEY_ALIAS: ${{ secrets.PKFORGE_ANDROID_KEY_ALIAS }}
           ANDROID_KEY_PASSWORD: ${{ secrets.PKFORGE_ANDROID_KEY_PASSWORD }}
         run: |
+          # Non-tag builds are diagnostic builds: they embed their assemblies (a plain
+          # Debug APK relies on Fast Deployment and aborts when sideloaded) and use the
+          # .debug app ID, so they install beside the release instead of over it.
           configuration="Debug"
-          signing_args=(-p:AndroidKeyStore=false)
+          signing_args=(-p:AndroidKeyStore=false -p:DiagnosticBuild=true)
           if [[ "$GITHUB_REF_TYPE" == "tag" ]]; then
             configuration="Release"
             signing_args=(
@@ -86,12 +89,18 @@ jobs:
             echo "aapt2 not found under '$sdk/build-tools'; cannot check the APK label."
             exit 1
           fi
+          package="io.github.gabzidevs.pkforge"
+          label="PKForge Fork"
+          if [[ "$GITHUB_REF_TYPE" != "tag" ]]; then
+            package="$package.debug"
+            label="PKForge Fork Diagnostics"
+          fi
           badging=$("$aapt2" dump badging "$APK_PATH")
           echo "$badging" | grep -E "^(package:|application-label:)"
-          echo "$badging" | grep -Fq "package: name='io.github.gabzidevs.pkforge'" \
-            || { echo "APK package is not io.github.gabzidevs.pkforge."; exit 1; }
-          echo "$badging" | grep -Fxq "application-label:'PKForge Fork'" \
-            || { echo "APK application label is not 'PKForge Fork'."; exit 1; }
+          echo "$badging" | grep -Fq "package: name='$package'" \
+            || { echo "APK package is not $package."; exit 1; }
+          echo "$badging" | grep -Fxq "application-label:'$label'" \
+            || { echo "APK application label is not '$label'."; exit 1; }
       - name: Verify permanent release signature
         if: github.ref_type == 'tag'
         env:
