@@ -57,7 +57,7 @@ Keep that backup. Android only installs an update signed with the same key as th
 
 To cut a release: bump `ApplicationDisplayVersion` and `ApplicationVersion` in `PKForge.App.csproj`, commit, then tag `v<display version>` and push the tag.
 
-Status: the first signed release has not been built yet, so the tag workflow (signing, certificate check, aapt2 check, release upload) is untested end to end.
+Status: the tag workflow ran end to end with `v3.1.1-fork.1`, the first signed release: it signed the APK, passed the certificate and aapt2 checks, and published the release that `/releases/latest` returns.
 
 ## Syncing with upstream
 
