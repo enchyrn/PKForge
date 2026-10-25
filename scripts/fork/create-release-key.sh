@@ -24,6 +24,8 @@ DNAME="CN=PKForge Fork, O=gabzidevs"
 VALIDITY_DAYS=10000
 KEYTOOL=(mise x java@temurin-21 -- keytool)
 SHA256_FORMAT='^([0-9A-F]{2}:){31}[0-9A-F]{2}$'
+P12_BEGIN='-----BEGIN PKCS12 BASE64-----'
+P12_END='-----END PKCS12 BASE64-----'
 
 die() { echo "error: $*" >&2; exit 1; }
 dry_run() { [[ "${DRY_RUN:-0}" == 1 ]]; }
@@ -64,17 +66,22 @@ keystore="$work/pkforge-fork-release.p12"
 if resume && ! dry_run; then
   item="$(jq '.[0]' <<<"$items")"
   item_id="$(jq -r .id <<<"$item")"
-  field() { jq -r --arg n "$1" '[.fields[]? | select(.name == $n) | .value][0] // empty' <<<"$item"; }
-  ALIAS="$(field alias)"
-  PKF_PASSWORD="$(field store_password)"
-  sha256="$(field cert_sha256)"
+  # A Login item: username = key alias, password = keystore password (PKCS12 uses it for the key too).
+  ALIAS="$(jq -r '.login.username // empty' <<<"$item")"
+  PKF_PASSWORD="$(jq -r '.login.password // empty' <<<"$item")"
+  sha256="$(jq -r '[.fields[]? | select(.name == "cert_sha256") | .value][0] // empty' <<<"$item")"
   [[ -n "$ALIAS" && -n "$PKF_PASSWORD" && -n "$sha256" ]] ||
-    die "the Bitwarden item is missing its alias, store_password or cert_sha256 field"
-  [[ "$PKF_PASSWORD" == "$(field key_password)" ]] || die "the Bitwarden item's key_password differs from store_password"
+    die "the Bitwarden item is missing its username (key alias), password or cert_sha256 field"
+  # The keystore lives in the note (works on every plan) and, with Premium, as an attachment too.
   attachment_id="$(jq -r '[.attachments[]? | select(.fileName | endswith(".p12")) | .id][0] // empty' <<<"$item")"
-  [[ -n "$attachment_id" ]] ||
-    die "the Bitwarden item has no .p12 attachment. No GitHub secrets exist yet, so nothing was signed with it: delete the item in Bitwarden and run this script again without RESUME."
-  bw get attachment "$attachment_id" --itemid "$item_id" --output "$keystore" >/dev/null || die "could not download the keystore attachment"
+  if [[ -n "$attachment_id" ]]; then
+    bw get attachment "$attachment_id" --itemid "$item_id" --output "$keystore" >/dev/null || die "could not download the keystore attachment"
+  else
+    jq -r '.notes // ""' <<<"$item" | awk "/^$P12_BEGIN\$/{p=1; next} /^$P12_END\$/{p=0} p" | tr -d '\n' |
+      base64 -D >"$keystore" 2>/dev/null || true
+    [[ -s "$keystore" ]] ||
+      die "the Bitwarden item holds no keystore (no .p12 attachment, nothing in its note). No GitHub secrets exist yet, so nothing was signed with it: delete the item in Bitwarden and run this script again without RESUME."
+  fi
   export PKF_PASSWORD
   [[ "$(fingerprint "$keystore")" == "$sha256" ]] ||
     die "the attached keystore doesn't open with the saved password or doesn't match cert_sha256"
@@ -100,19 +107,22 @@ fi
 
 if ! resume; then
   # Bitwarden first: if anything after this fails, the key is already backed up.
-  item_id="$(bw get template item | ITEM_NAME="$ITEM_NAME" ALIAS="$ALIAS" SHA="$sha256" REPO="$REPO" jq '
-    .type = 2 | .secureNote = { type: 0 } | .login = null | .name = env.ITEM_NAME |
-    .notes = "Android release key for the PKForge fork (\(env.REPO)). The attached .p12 is the keystore. Losing it means future updates cannot install over existing copies." |
-    .fields = [
-      { name: "alias", value: env.ALIAS, type: 0 },
-      { name: "store_password", value: env.PKF_PASSWORD, type: 1 },
-      { name: "key_password", value: env.PKF_PASSWORD, type: 1 },
-      { name: "cert_sha256", value: env.SHA, type: 0 }
-    ]' | bw encode | bw create item | jq -r .id)"
+  # The keystore goes in the note itself, base64 between markers, because attachments need
+  # Bitwarden Premium; it is attached as a file as well when the account allows it.
+  P12_B64="$(base64 -i "$keystore" | fold -w 76)"
+  export P12_B64
+  item_id="$(bw get template item | ITEM_NAME="$ITEM_NAME" ALIAS="$ALIAS" SHA="$sha256" REPO="$REPO" \
+    BEGIN="$P12_BEGIN" END="$P12_END" jq '
+    .type = 1 | .secureNote = null | .name = env.ITEM_NAME |
+    .login = { username: env.ALIAS, password: env.PKF_PASSWORD, uris: [ { uri: "https://github.com/\(env.REPO)", match: null } ], totp: null } |
+    .notes = "Android release key for the PKForge fork (\(env.REPO)). The keystore (PKCS12; username = key alias, password = keystore and key password) is the base64 block below; decode it with `base64 -D`. Losing it means future updates cannot install over existing copies.\n\n\(env.BEGIN)\n\(env.P12_B64)\n\(env.END)" |
+    .fields = [ { name: "cert_sha256", value: env.SHA, type: 0 } ]' | bw encode | bw create item | jq -r .id)"
   [[ -n "$item_id" && "$item_id" != null ]] || die "Bitwarden did not create the item"
-  bw create attachment --file "$keystore" --itemid "$item_id" >/dev/null ||
-    die "Bitwarden did not take the keystore attachment (item $item_id was created; delete it and run again)"
-  echo "Saved to Bitwarden: \"$ITEM_NAME\" ($item_id), keystore attached"
+  if bw create attachment --file "$keystore" --itemid "$item_id" >/dev/null 2>&1; then
+    echo "Saved to Bitwarden: \"$ITEM_NAME\" ($item_id), keystore in the note and attached"
+  else
+    echo "Saved to Bitwarden: \"$ITEM_NAME\" ($item_id), keystore in the note (no attachment: needs Premium)"
+  fi
 fi
 
 base64 -i "$keystore" | tr -d '\n' | gh secret set PKFORGE_ANDROID_KEYSTORE_BASE64 --repo "$REPO"
