@@ -26,6 +26,13 @@ Personal fork of [PKForge](https://github.com/sofianeelhor/PKForge) at https://g
 
 - `DsFolderButton` in `src/PKForge.App/Views/DsKit.cs`: a selected row whose label is too long scrolls it in an `async void` loop. Closing the menu mid-scroll left the loop running against the torn-down MAUI context, and the next `TranslateToAsync` threw `ObjectDisposedException: IServiceProvider`, killing the app. The row now stops the loop on `Unloaded`, the loop also ends once the label has no handler, and the disposal exception is caught. Not covered by tests (App views have no test project); found and checked on device through logcat.
 
+**Poképark residents keep who they are (also in upstream)**
+
+- `ParkIdentity` in `src/PKForge.Engine/ParkIdentity.cs`: a resident is its trainer ID with its PID and encryption constant (DVs on the Game Boy), not a hash of its whole data. Before, one friendship point from walking made the daycare refuse the pickup ("it was changed in its save since you left it") and made a resend a second resident.
+- The daycare (`PokeparkDaycareService`) records that identity at check-in and writes back to the same Pokémon wherever it now is in the open save, evolved or played since; EXP it gained elsewhere meanwhile adds up with the stay's. `PokeparkService` keys new save visitors by it, follows a moved one (`SourceOf`), and answers a resend, including of a resident sent before the fix, with "already lives in Poképark".
+- Stays and residents recorded before keep their old meaning (`IsLegacyFingerprint`): the slot they came from, unchanged bytes for a stay.
+- Tests: `tests/PKForge.Engine.Tests/ParkIdentityTests.cs`. The App wiring is compile-checked by CI only.
+
 **Fork identity**
 
 - `src/PKForge.App/PKForge.App.csproj`: app ID `io.github.gabzidevs.pkforge` (diagnostic build `...pkforge.debug`, titled "PKForge Fork Diagnostics"), title "PKForge Fork", version `3.1.1-fork.1`, version code `312`.

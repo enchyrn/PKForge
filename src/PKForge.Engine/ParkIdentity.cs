@@ -1,0 +1,36 @@
+using System.Security.Cryptography;
+using PKHeX.Core;
+
+namespace PKForge.Engine;
+
+/// <summary>
+/// Who a Poképark resident is, from what never changes in play: its trainer ID with its PID and
+/// encryption constant (Gen 3 on), or with its DVs on the Game Boy, where there is no PID.
+/// Friendship, EXP, HP, moves and evolving leave it the same Pokémon; another Pokémon put in its
+/// slot or a different trainer's copy does not match. The key has no ':' so it fits in a resident id.
+/// </summary>
+public static class ParkIdentity
+{
+    /// <summary>The identity of <paramref name="data"/>, or null when it isn't a readable Pokémon.</summary>
+    public static string? Of(byte[] data, string? format) =>
+        EntityBytes.Parse(data, format) is { Species: > 0 } pk ? Of(pk) : null;
+
+    public static string Of(PKM pk) => pk.Format <= 2
+        ? $"gb{pk.ID32:X8}{pk.IV_ATK:X}{pk.IV_DEF:X}{pk.IV_SPE:X}{pk.IV_SPA:X}"
+        : $"id{pk.ID32:X8}{pk.PID:X8}{pk.EncryptionConstant:X8}";
+
+    /// <summary>Stays and residents recorded before identities were kept a SHA-256 of the whole
+    /// Pokémon: 64 hex digits, which no identity key is.</summary>
+    public static bool IsLegacyFingerprint(string recorded) =>
+        recorded.Length == 64 && recorded.All(Uri.IsHexDigit);
+
+    /// <summary>Whether <paramref name="data"/> is still the Pokémon <paramref name="recorded"/>
+    /// was taken from. A legacy fingerprint keeps its old meaning: the bytes must be unchanged.</summary>
+    public static bool IsSameIndividual(string? recorded, byte[] data, string? format) => recorded switch
+    {
+        null => false,
+        _ when IsLegacyFingerprint(recorded) =>
+            string.Equals(recorded, Convert.ToHexString(SHA256.HashData(data)), StringComparison.OrdinalIgnoreCase),
+        _ => Of(data, format) == recorded,
+    };
+}

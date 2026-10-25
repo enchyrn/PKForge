@@ -186,8 +186,12 @@ public sealed class PokeparkService(IBankService bank, ISaveSessionService saves
         if (session.GetMetInfo(box, slot).IsEgg) return "Eggs can visit Poképark after they hatch.";
         var detail = session.ReadEntity(box, slot);
         var documentId = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(document.DocumentId)))[..16];
-        var fingerprint = Convert.ToHexString(SHA256.HashData(session.ExportSlot(box, slot).Data));
-        return AddVisitor(new ParkPokemon($"save:{documentId}:{box}:{slot}:{fingerprint}", detail.Species,
+        var export = session.ExportSlot(box, slot);
+        if (ParkIdentity.Of(export.Data, export.Format) is not { } identity) return "This Pokémon can't be read, so it can't visit Poképark.";
+        // Keyed by who it is, not its bytes: playing on, or moving it to another box, doesn't make it a new resident.
+        if (LoadRoster().FirstOrDefault(p => IsResident(p, documentId, identity)) is { } already)
+            return $"{already.Name} already lives in Poképark.";
+        return AddVisitor(new ParkPokemon($"save:{documentId}:{box}:{slot}:{identity}", detail.Species,
             detail.Form, detail.IsShiny, string.IsNullOrWhiteSpace(detail.Nickname) ? detail.SpeciesName : detail.Nickname,
             $"{document.DisplayName} · {(box < 0 ? "Party" : $"Box {box + 1}")} · Slot {slot + 1}",
             GameName: $"Gen {session.Generation}", TrainerName: session.GetTrainer().Name, Origin: document.DisplayName));
@@ -266,11 +270,30 @@ public sealed class PokeparkService(IBankService bank, ISaveSessionService saves
             if (parts is ["save", var document, var boxText, var slotText, ..] && saves.CurrentSession is { } session &&
                 saves.Current?.Document is { } open &&
                 Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(open.DocumentId)))[..16] == document &&
-                int.TryParse(boxText, out var box) && int.TryParse(slotText, out var slot) &&
-                session.ReadEntity(box, slot) is { } detail && detail.Species == mon.Species)
+                int.TryParse(boxText, out var box) && int.TryParse(slotText, out var slot))
             {
-                var export = session.ExportSlot(box, slot);
-                return new(export.Data, export.Format, null, box, slot, open.DisplayName);
+                var identity = parts.Length > 4 && !ParkIdentity.IsLegacyFingerprint(parts[4]) ? parts[4] : null;
+                if (identity is null)
+                {
+                    // A resident from before identities: the Pokémon of its species in the slot it came from.
+                    if (session.ReadEntity(box, slot) is { } detail && detail.Species == mon.Species)
+                    {
+                        var export = session.ExportSlot(box, slot);
+                        return new(export.Data, export.Format, null, box, slot, open.DisplayName);
+                    }
+                }
+                else
+                {
+                    // Where it was sent from first, else wherever it has been moved to in the save (evolved or not).
+                    var places = session.Snapshot.Slots.Where(s => s.Species is > 0)
+                        .OrderBy(s => s.Box == box && s.Slot == slot ? 0 : 1);
+                    foreach (var place in places)
+                    {
+                        var export = session.ExportSlot(place.Box, place.Slot);
+                        if (ParkIdentity.IsSameIndividual(identity, export.Data, export.Format))
+                            return new(export.Data, export.Format, null, place.Box, place.Slot, open.DisplayName);
+                    }
+                }
             }
         }
         catch (Exception ex) when (ex is InvalidOperationException or ArgumentException or IndexOutOfRangeException or IOException or FormatException)
@@ -296,6 +319,14 @@ public sealed class PokeparkService(IBankService bank, ISaveSessionService saves
         Write(AutoFillSuppressedKey, true);
         return count;
     }
+
+    /// <summary>Whether <paramref name="resident"/> is that Pokémon of that save: by its identity, or, for one
+    /// sent before identities were kept, by the Pokémon its slot still holds.</summary>
+    private bool IsResident(ParkPokemon resident, string documentId, string identity) =>
+        resident.Id.StartsWith($"save:{documentId}:", StringComparison.Ordinal) &&
+        (resident.Id.EndsWith($":{identity}", StringComparison.Ordinal) ||
+         (ParkIdentity.IsLegacyFingerprint(resident.Id[(resident.Id.LastIndexOf(':') + 1)..]) &&
+          SourceOf(resident) is { } source && ParkIdentity.Of(source.Data, source.Format) == identity));
 
     private string AddVisitor(ParkPokemon pokemon)
     {

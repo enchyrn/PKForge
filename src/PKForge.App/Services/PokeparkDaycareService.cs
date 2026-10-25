@@ -1,4 +1,3 @@
-using System.Security.Cryptography;
 using System.Text.Json;
 using PKForge.App.ViewModels;
 using PKForge.Domain;
@@ -6,8 +5,9 @@ using PKForge.Engine;
 
 namespace PKForge.App.Services;
 
-/// <summary>A resident left at the Poképark daycare: since when, and a fingerprint of its data at
-/// check-in, so the daycare only ever writes back to the very Pokémon it was given.</summary>
+/// <summary>A resident left at the Poképark daycare: since when, and who it is at check-in
+/// (<see cref="ParkIdentity"/>; stays from before kept a hash of its whole data), so the daycare only
+/// ever writes back to the very Pokémon it was given, however it was played since.</summary>
 public sealed record ParkStay(string ResidentId, DateTimeOffset Since, string? Fingerprint);
 
 /// <summary>
@@ -67,7 +67,7 @@ public sealed class PokeparkDaycareService(PokeparkService park, IBankService ba
         if (state.Stays.Any(s => s.ResidentId == mon.Id)) return $"{mon.Name} is already at the daycare.";
         if (state.Stays.Length >= Capacity) return $"The daycare is full: Blissey can look after {Capacity} at a time.";
         var source = park.SourceOf(mon);
-        Save(state with { Stays = [.. state.Stays, new ParkStay(mon.Id, DateTimeOffset.Now, source is null ? null : Fingerprint(source.Data))] });
+        Save(state with { Stays = [.. state.Stays, new ParkStay(mon.Id, DateTimeOffset.Now, source is null ? null : ParkIdentity.Of(source.Data, source.Format))] });
         var rules = source is null ? null : ParkDaycareService.RulesFor(source.Data, source.Format);
         var note = rules switch
         {
@@ -125,8 +125,8 @@ public sealed class PokeparkDaycareService(PokeparkService park, IBankService ba
                 : settings.DaycarePace == DaycarePace.Off ? $"{hello} Daycare pace is Off, so it comes back as it was."
                 : $"{hello} It wasn't here long enough to grow.";
         if (!WritesBack(settings)) return $"{hello} It grew {grew} here. Writing back is off, so that stays in the park.";
-        if (stay.Fingerprint is null || stay.Fingerprint != Fingerprint(source.Data))
-            return $"{hello} It grew {grew} here, but it was changed in its save since you left it, so the daycare leaves it alone.";
+        if (!ParkIdentity.IsSameIndividual(stay.Fingerprint, source.Data, source.Format))
+            return $"{hello} It grew {grew} here, but the Pokémon in its save isn't the one you left, so the daycare leaves it alone.";
         if (source.BankId is { } id)
         {
             var entry = bank.GetAll().FirstOrDefault(e => e.Id == id);
@@ -180,5 +180,4 @@ public sealed class PokeparkDaycareService(PokeparkService park, IBankService ba
         _ => $"{(int)time.TotalDays} days"
     };
 
-    private static string Fingerprint(byte[] data) => Convert.ToHexString(SHA256.HashData(data));
 }

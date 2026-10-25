@@ -6,4 +6,4 @@ What it means for PKForge:
 
 - **PKForge is a design reference, not a code dependency.** The Poképark, its daycare (including the pace setting), the Bank and the offline journal are the ideas the PokeDaisy modules borrow from. PKHeX.Core stays here.
 - **Camp is owned by the PokeDaisy fork.** Its state will live in a camp journal file beside the save. A later PKForge step can read that journal and make camps walkable in the Poképark, queueing anything done there for PokeDaisy to apply. PKForge never edits the save for camp.
-- **No double training.** The Poképark daycare only writes back to a Pokémon unchanged since check-in, so a Pokémon trained by a PokeDaisy module in between is refused rather than trained twice.
+- **Daycare write-back follows the Pokémon, not its bytes.** The Poképark daycare writes back to the same individual (trainer ID and PID) however it was played since, so EXP a PokeDaisy module or a battle gave it in between adds up with the stay's rather than blocking it.
