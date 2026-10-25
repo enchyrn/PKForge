@@ -115,3 +115,28 @@ public sealed class ParkIdentityResidentIdTests
     public void A_resident_id_carries_its_identity_only_once_identities_were_kept(string residentId, string? identity) =>
         Assert.Equal(identity, ParkIdentity.InResidentId(residentId));
 }
+
+public sealed class ParkIdentityCfruTests
+{
+    private static byte[] Unbound(uint pid, uint otid, uint exp)
+    {
+        var bytes = new byte[PKForge.Engine.RadicalRed.RadicalRedFormat.PcMonSize];
+        // Knowing Dark Pulse (399), a move Gen 3 lacks, it can't become a Gen 3 Pokémon.
+        _ = new PKForge.Engine.Unbound.UnboundMon(bytes, 0, party: false) { Pid = pid, Otid = otid, Species = 246, Experience = exp, Moves = [44, 399, 0, 0] };
+        return bytes;
+    }
+
+    [Fact]
+    public void An_Unbound_Pokemon_is_known_by_its_trainer_and_PID_whether_or_not_Gen_3_can_hold_it()
+    {
+        var format = PKForge.Engine.RadicalRed.CfruEntity.Unbound;
+        var key = ParkIdentity.Of(Unbound(0xA7AF64E9, 0x1234ABCD, 1000), format);
+        Assert.Equal("id1234ABCDA7AF64E9A7AF64E9", key);
+        Assert.True(ParkIdentity.IsSameIndividual(key, Unbound(0xA7AF64E9, 0x1234ABCD, 5000), format));
+        Assert.False(ParkIdentity.IsSameIndividual(key, Unbound(0xA7AF64E8, 0x1234ABCD, 1000), format));
+    }
+
+    [Fact]
+    public void An_empty_Unbound_record_has_no_identity() =>
+        Assert.Null(ParkIdentity.Of(new byte[PKForge.Engine.RadicalRed.RadicalRedFormat.PcMonSize], PKForge.Engine.RadicalRed.CfruEntity.Unbound));
+}

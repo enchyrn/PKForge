@@ -261,6 +261,12 @@ public sealed class PokeparkService(IBankService bank, ISaveSessionService saves
         return nature;
     }
 
+    /// <summary>Whether the save a save resident came from is the one open now.</summary>
+    public bool SaveIsOpenFor(ParkPokemon mon) =>
+        mon.Id.Split(':') is ["save", var document, ..] && saves.CurrentSession is not null &&
+        saves.Current?.Document is { } open &&
+        Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(open.DocumentId)))[..16] == document;
+
     /// <summary>Where a resident's real data lives: a Bank entry, or a slot of the open save.</summary>
     public sealed record ParkSource(byte[] Data, string? Format, Guid? BankId, int Box, int Slot, string SourceName);
 

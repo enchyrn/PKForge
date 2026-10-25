@@ -62,6 +62,11 @@ public static class ParkDaycareService
         return (uint)Math.Floor(total);
     }
 
+    /// <summary>Whether a pickup should wait: a save resident whose stay would be written back, while its save
+    /// isn't open. Picking it up then would end the stay with nothing written, losing the time it spent here.</summary>
+    public static bool WaitsForSave(bool fromSave, bool saveOpen, bool writesBack, DaycarePace pace) =>
+        fromSave && !saveOpen && writesBack && pace != DaycarePace.Off;
+
     public static uint ExpForStay(byte[] data, string? format, TimeSpan stay, DaycarePace pace) =>
         EntityBytes.Parse(data, format) is { } pk ? ExpForStay(pk, stay, pace) : 0;
 

@@ -96,6 +96,9 @@ public sealed class PokeparkDaycareService(PokeparkService park, IBankService ba
         if (state.Stays.FirstOrDefault(s => s.ResidentId == mon.Id) is not { } stay) return $"{mon.Name} is not at the daycare.";
         var time = DateTimeOffset.Now - stay.Since;
         var stayed = Duration(time);
+        if (ParkDaycareService.WaitsForSave(mon.Id.StartsWith("save:", StringComparison.Ordinal), park.SaveIsOpenFor(mon),
+                WritesBack(park.Settings), park.Settings.DaycarePace))
+            return $"{mon.Name} has stayed {stayed}. Open its save in PKForge first, then pick it up: Blissey keeps it here until then, so the time counts.";
         var message = await GrowAsync(mon, stay, time, stayed);
         var left = Load();
         Save(left with { Stays = left.Stays.Where(s => s.ResidentId != mon.Id).ToArray(), Egg = left.Egg is { } egg && egg.Contains(mon.Id) ? null : left.Egg });

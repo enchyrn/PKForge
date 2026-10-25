@@ -13,7 +13,10 @@ public static class ParkIdentity
 {
     /// <summary>The identity of <paramref name="data"/>, or null when it isn't a readable Pokémon.</summary>
     public static string? Of(byte[] data, string? format) =>
-        EntityBytes.Parse(data, format) is { Species: > 0 } pk ? Of(pk) : null;
+        // A CFRU hack's record (Unbound, Radical Red) is read as it is: one Gen 3 can't hold doesn't convert.
+        RadicalRed.CfruEntity.Recognize(format) is { } cfru
+            ? RadicalRed.CfruEntity.Identity(data, cfru) is { } id ? $"id{id.Otid:X8}{id.Pid:X8}{id.Pid:X8}" : null
+            : EntityBytes.Parse(data, format) is { Species: > 0 } pk ? Of(pk) : null;
 
     public static string Of(PKM pk) => pk.Format <= 2
         ? $"gb{pk.ID32:X8}{pk.IV_ATK:X}{pk.IV_DEF:X}{pk.IV_SPE:X}{pk.IV_SPA:X}"

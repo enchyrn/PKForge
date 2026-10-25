@@ -31,12 +31,14 @@ Personal fork of [PKForge](https://github.com/sofianeelhor/PKForge) at https://g
 - `ParkIdentity` in `src/PKForge.Engine/ParkIdentity.cs`: a resident is its trainer ID with its PID and encryption constant (DVs on the Game Boy), not a hash of its whole data. Before, one friendship point from walking made the daycare refuse the pickup ("it was changed in its save since you left it") and made a resend a second resident.
 - The daycare (`PokeparkDaycareService`) records that identity at check-in and writes back to the same Pokémon wherever it now is in the open save, evolved or played since; EXP it gained elsewhere meanwhile adds up with the stay's. `PokeparkService` keys new save visitors by it, follows a moved one (`SourceOf`), and answers a resend, including of a resident sent before the fix, with "already lives in Poképark".
 - Stays and residents recorded before keep their old meaning (`IsLegacyFingerprint`): the slot they came from, unchanged bytes for a stay. Opening the park gives such residents their identity once their save is open (`RememberIdentities`).
+- Unbound and the other CFRU hacks' records are known by the PID and trainer ID at their start (`CfruEntity.Identity`), read as they are: going through a Gen 3 conversion refused Pokémon Gen 3 can't hold (a newer move, item or form), so they couldn't visit.
+- **A pickup waits for its save.** Picking a resident up while its save isn't open in PKForge used to end the stay with nothing written ("stays a park memory"). Now Blissey keeps it until the save is open (`ParkDaycareService.WaitsForSave`), so the time counts.
 - **Leaving keeps the memories.** "Leave park" and "Empty park" no longer delete a resident's care (needs, bond); the park remembers who left (`ParkDepartures`, `pkforge.pokepark.departed.v1`, the newest 200). Sending the same Pokémon back restores it under its old id, so its care, bond, dialogue and friendships are its own again. Releasing a Pokémon or deleting its Bank entry still forgets it.
 - Tests: `tests/PKForge.Engine.Tests/ParkIdentityTests.cs`. The App wiring is compile-checked by CI only.
 
 **Fork identity**
 
-- `src/PKForge.App/PKForge.App.csproj`: app ID `io.github.gabzidevs.pkforge` (diagnostic build `...pkforge.debug`, titled "PKForge Fork Diagnostics"), title "PKForge Fork", version `3.1.1-fork.2`, version code `313`.
+- `src/PKForge.App/PKForge.App.csproj`: app ID `io.github.gabzidevs.pkforge` (diagnostic build `...pkforge.debug`, titled "PKForge Fork Diagnostics"), title "PKForge Fork", version `3.1.1-fork.3`, version code `314`.
 - The repo moved from `gabzidevs/PKForge` to `enchyrn/PKForge` on 2026-10-26 (GitHub redirects the old URLs). The app ID keeps `gabzidevs`: changing it would make Android treat the fork as a new app, unable to update the installed one.
 - `AndroidManifest.xml` no longer hard-codes `android:label`; the build writes `ApplicationTitle` there.
 - `AppUpdateService` checks `https://api.github.com/repos/enchyrn/PKForge/releases/latest`. Its broadcast action/extra names use the fork's ID so the two installed apps never answer each other.

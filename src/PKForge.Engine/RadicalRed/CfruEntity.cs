@@ -98,6 +98,21 @@ internal static class CfruEntity
 
     /// <summary>The PK3 every other game imports, or null when the bytes are not a mon of that
     /// game or one of its ids has no Generation 3 counterpart (<see cref="Pk3Refusal"/> says which).</summary>
+    /// <summary>The PID and trainer ID a CFRU record keeps at its start, as Gen 3 does; null for an empty or
+    /// unreadable record. Read from the record itself, so a Pokémon Gen 3 can't hold (a newer move, item or
+    /// form) still has them.</summary>
+    public static (uint Pid, uint Otid)? Identity(byte[] bytes, string format)
+    {
+        if (bytes.Length != RadicalRedFormat.PcMonSize) return null;
+        if (format == Unbound)
+        {
+            var mon = new UnboundMon(bytes.ToArray(), 0, party: false);
+            return mon.LooksValid ? (mon.Pid, mon.Otid) : null;
+        }
+        var cfru = new RadicalRedMon(bytes.ToArray(), 0, false, DataOf(format));
+        return cfru.LooksValid ? (cfru.Pid, cfru.Otid) : null;
+    }
+
     public static PK3? ToPk3(byte[] bytes, string format) => ToPk3(bytes, format, out _);
 
     /// <summary>What changed for these bytes to fit Generation 3 on their way to another game
