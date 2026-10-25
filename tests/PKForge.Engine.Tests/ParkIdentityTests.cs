@@ -140,3 +140,25 @@ public sealed class ParkIdentityCfruTests
     public void An_empty_Unbound_record_has_no_identity() =>
         Assert.Null(ParkIdentity.Of(new byte[PKForge.Engine.RadicalRed.RadicalRedFormat.PcMonSize], PKForge.Engine.RadicalRed.CfruEntity.Unbound));
 }
+
+public sealed class ParkVisitorEggTests
+{
+    private static byte[] Unbound(bool egg)
+    {
+        var bytes = new byte[PKForge.Engine.RadicalRed.RadicalRedFormat.PcMonSize];
+        var mon = new PKForge.Engine.Unbound.UnboundMon(bytes, 0, party: false) { Pid = 0xA7AF64E9, Otid = 0x1234ABCD, Species = 246, Experience = 1000 };
+        mon.IVs = [10, 10, 10, 10, 10, 10];
+        // The PC record keeps its IV word at 0x36; bit 30 is the egg flag, as in Gen 3.
+        if (egg) System.Buffers.Binary.BinaryPrimitives.WriteUInt32LittleEndian(bytes.AsSpan(0x36),
+            System.Buffers.Binary.BinaryPrimitives.ReadUInt32LittleEndian(bytes.AsSpan(0x36)) | 0x4000_0000u);
+        return bytes;
+    }
+
+    [Fact]
+    public void An_Unbound_Pokemon_is_checked_for_an_egg_from_its_own_record()
+    {
+        var format = PKForge.Engine.RadicalRed.CfruEntity.Unbound;
+        Assert.False(ParkIdentity.IsEgg(Unbound(egg: false), format));
+        Assert.True(ParkIdentity.IsEgg(Unbound(egg: true), format));
+    }
+}

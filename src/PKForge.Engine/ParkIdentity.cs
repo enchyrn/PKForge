@@ -18,6 +18,13 @@ public static class ParkIdentity
             ? RadicalRed.CfruEntity.Identity(data, cfru) is { } id ? $"id{id.Otid:X8}{id.Pid:X8}{id.Pid:X8}" : null
             : EntityBytes.Parse(data, format) is { Species: > 0 } pk ? Of(pk) : null;
 
+    /// <summary>Whether <paramref name="data"/> is an egg, read from the record itself (a CFRU hack's through its
+    /// own layout, which has no met data to ask); null when it isn't a readable Pokémon.</summary>
+    public static bool? IsEgg(byte[] data, string? format) =>
+        RadicalRed.CfruEntity.Recognize(format) is { } cfru
+            ? RadicalRed.CfruEntity.Facts(data, cfru)?.IsEgg
+            : EntityBytes.Parse(data, format)?.IsEgg;
+
     public static string Of(PKM pk) => pk.Format <= 2
         ? $"gb{pk.ID32:X8}{pk.IV_ATK:X}{pk.IV_DEF:X}{pk.IV_SPE:X}{pk.IV_SPA:X}"
         : $"id{pk.ID32:X8}{pk.PID:X8}{pk.EncryptionConstant:X8}";

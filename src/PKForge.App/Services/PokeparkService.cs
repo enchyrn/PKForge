@@ -184,10 +184,11 @@ public sealed class PokeparkService(IBankService bank, ISaveSessionService saves
         if (session is null || document is null) return "Open a save to send a Pokémon to Poképark.";
         if (!session.Snapshot.Slots.Any(s => s.Box == box && s.Slot == slot && s.Species is > 0))
             return "Select a Pokémon first.";
-        if (session.GetMetInfo(box, slot).IsEgg) return "Eggs can visit Poképark after they hatch.";
+        var export = session.ExportSlot(box, slot);
+        // From the record itself: ROM hacks (Unbound, Radical Red) have no met info to ask, and asking threw.
+        if (ParkIdentity.IsEgg(export.Data, export.Format) is true) return "Eggs can visit Poképark after they hatch.";
         var detail = session.ReadEntity(box, slot);
         var documentId = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(document.DocumentId)))[..16];
-        var export = session.ExportSlot(box, slot);
         if (ParkIdentity.Of(export.Data, export.Format) is not { } identity) return "This Pokémon can't be read, so it can't visit Poképark.";
         // Keyed by who it is, not its bytes: playing on, or moving it to another box, doesn't make it a new resident.
         if (LoadRoster().FirstOrDefault(p => IsResident(p, documentId, identity)) is { } already)
@@ -224,7 +225,7 @@ public sealed class PokeparkService(IBankService bank, ISaveSessionService saves
                      DateOnly.TryParse(info.MetDate, System.Globalization.CultureInfo.InvariantCulture, out var parsed))
                 met = parsed;
         }
-        catch (Exception ex) when (ex is InvalidOperationException or ArgumentException or IndexOutOfRangeException or IOException or FormatException)
+        catch (Exception ex) when (ex is InvalidOperationException or ArgumentException or IndexOutOfRangeException or IOException or FormatException or NotSupportedException)
         {
             // No date to celebrate.
         }
@@ -253,7 +254,7 @@ public sealed class PokeparkService(IBankService bank, ISaveSessionService saves
                      session.ReadEntity(box, slot) is { } detail && detail.Species == mon.Species)
                 nature = detail.Nature;
         }
-        catch (Exception ex) when (ex is InvalidOperationException or ArgumentException or IndexOutOfRangeException or IOException or FormatException)
+        catch (Exception ex) when (ex is InvalidOperationException or ArgumentException or IndexOutOfRangeException or IOException or FormatException or NotSupportedException)
         {
             // An unreadable entry keeps the taste the park gives it from its id.
         }
@@ -307,7 +308,7 @@ public sealed class PokeparkService(IBankService bank, ISaveSessionService saves
                 }
             }
         }
-        catch (Exception ex) when (ex is InvalidOperationException or ArgumentException or IndexOutOfRangeException or IOException or FormatException)
+        catch (Exception ex) when (ex is InvalidOperationException or ArgumentException or IndexOutOfRangeException or IOException or FormatException or NotSupportedException)
         {
             // Unreadable: the park keeps it as it is.
         }
