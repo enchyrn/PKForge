@@ -46,7 +46,9 @@ Signing setup, in the repo's Actions settings:
 - Secrets: `PKFORGE_ANDROID_KEYSTORE_BASE64` (the PKCS12 keystore, base64), `PKFORGE_ANDROID_KEYSTORE_PASSWORD`, `PKFORGE_ANDROID_KEY_ALIAS`, `PKFORGE_ANDROID_KEY_PASSWORD`.
 - Variable: `PKFORGE_RELEASE_CERT_SHA256`, the certificate's SHA-256 fingerprint exactly as `keytool -list -v` or `keytool -printcert` prints it: uppercase hex, colon-separated (`AA:BB:...`), 32 bytes. The workflow rejects any other form.
 
-Keep a backup of the keystore and its passwords somewhere safe, outside the repo. Android only installs an update signed with the same key as the installed app; if the key is lost, every installed copy has to be uninstalled (and its data lost) before a new key can be used.
+`scripts/fork/create-release-key.sh` does all of this in one go, and is meant to be run once, by the owner, in their own terminal: it makes the key with keytool (Java through mise), saves it to Bitwarden as a secure note named "PKForge Fork release key" (passwords as hidden fields, the `.p12` attached), then sets the four secrets and the variable with `gh`. It never prints a secret and refuses to run if the Bitwarden item or the keystore secret already exists. `DRY_RUN=1` makes a throwaway key and stops before Bitwarden and GitHub.
+
+Keep that backup. Android only installs an update signed with the same key as the installed app; if the key is lost, every installed copy has to be uninstalled (and its data lost) before a new key can be used. To restore, take the `.p12` and passwords from the Bitwarden item rather than making a new key.
 
 To cut a release: bump `ApplicationDisplayVersion` and `ApplicationVersion` in `PKForge.App.csproj`, commit, then tag `v<display version>` and push the tag.
 
