@@ -46,6 +46,18 @@ jobs:
             exit 1
           fi
           printf '%s' "$PKFORGE_ANDROID_KEYSTORE_BASE64" | base64 --decode > "${RUNNER_TEMP}/pkforge-release.p12"
+      - name: Decode diagnostic signing key
+        if: github.ref_type != 'tag'
+        env:
+          PKFORGE_DIAGNOSTIC_KEYSTORE_BASE64: ${{ secrets.PKFORGE_DIAGNOSTIC_KEYSTORE_BASE64 }}
+        run: |
+          # Without it (e.g. pull requests from other forks) the build signs with a fresh
+          # throwaway key, and that APK can't update an installed diagnostic build.
+          if [[ -z "$PKFORGE_DIAGNOSTIC_KEYSTORE_BASE64" ]]; then
+            echo "::warning::PKFORGE_DIAGNOSTIC_KEYSTORE_BASE64 is not set; this diagnostic APK is signed with a throwaway key."
+            exit 0
+          fi
+          printf '%s' "$PKFORGE_DIAGNOSTIC_KEYSTORE_BASE64" | base64 --decode > "${RUNNER_TEMP}/pkforge-diagnostic.p12"
       - name: Build Android APK
         shell: bash
         env:
@@ -53,12 +65,25 @@ jobs:
           ANDROID_KEYSTORE_PASSWORD: ${{ secrets.PKFORGE_ANDROID_KEYSTORE_PASSWORD }}
           ANDROID_KEY_ALIAS: ${{ secrets.PKFORGE_ANDROID_KEY_ALIAS }}
           ANDROID_KEY_PASSWORD: ${{ secrets.PKFORGE_ANDROID_KEY_PASSWORD }}
+          DIAGNOSTIC_KEYSTORE_PATH: ${{ runner.temp }}/pkforge-diagnostic.p12
         run: |
           # Non-tag builds are diagnostic builds: they embed their assemblies (a plain
           # Debug APK relies on Fast Deployment and aborts when sideloaded) and use the
           # .debug app ID, so they install beside the release instead of over it.
           configuration="Debug"
           signing_args=(-p:AndroidKeyStore=false -p:DiagnosticBuild=true)
+          if [[ -f "$DIAGNOSTIC_KEYSTORE_PATH" ]]; then
+            # A stable key, so each new diagnostic build updates the installed one in place.
+            # Like Android's own debug key, its passwords are "android"; the keystore is the secret.
+            signing_args=(
+              -p:DiagnosticBuild=true
+              -p:AndroidKeyStore=true
+              -p:AndroidSigningKeyStore="$DIAGNOSTIC_KEYSTORE_PATH"
+              -p:AndroidSigningStorePass=android
+              -p:AndroidSigningKeyAlias=pkforge-fork-diagnostic
+              -p:AndroidSigningKeyPass=android
+            )
+          fi
           if [[ "$GITHUB_REF_TYPE" == "tag" ]]; then
             configuration="Release"
             signing_args=(
@@ -121,6 +146,25 @@ jobs:
           actual="${actual//[[:space:]]/}"
           if [[ "$actual" != "$expected" ]]; then
             echo "Signing certificate mismatch."
+            echo "  expected: $expected"
+            echo "  actual:   $actual"
+            exit 1
+          fi
+      - name: Verify diagnostic signature
+        if: github.ref_type != 'tag'
+        env:
+          EXPECTED_CERT_SHA256: ${{ vars.PKFORGE_DIAGNOSTIC_CERT_SHA256 }}
+          DIAGNOSTIC_KEYSTORE_PATH: ${{ runner.temp }}/pkforge-diagnostic.p12
+        run: |
+          line=$(keytool -printcert -jarfile "${{ steps.apk.outputs.path }}" | tr -d '\r' | grep -m1 'SHA256:')
+          echo "$line"
+          # Only a build signed with the stable key has a fingerprint to match.
+          [[ -f "$DIAGNOSTIC_KEYSTORE_PATH" ]] || exit 0
+          expected="${EXPECTED_CERT_SHA256//[[:space:]]/}"
+          actual="${line#*SHA256:}"
+          actual="${actual//[[:space:]]/}"
+          if [[ -n "$expected" && "$actual" != "$expected" ]]; then
+            echo "Diagnostic signing certificate mismatch."
             echo "  expected: $expected"
             echo "  actual:   $actual"
             exit 1
