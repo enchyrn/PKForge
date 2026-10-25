@@ -453,11 +453,14 @@ public sealed class PokeparkPage : ContentPage, IPadHandler, IPadStickHandler
 
     private void Reload()
     {
+        _park.RememberIdentities();
         _scene.Residents = _park.LoadRoster();
         // Needs saved at the last visit come back, aged by the time away; once per resident.
         var now = DateTimeOffset.Now;
-        // The needs saved at the last visit, aged by the time away, and the story of that time.
-        var saved = _care.Load().Where(c => _restored.Add(c.Id)).ToArray();
+        // The needs saved at the last visit, aged by the time away, and the story of that time. Only
+        // residents here now: one that left keeps its care for when it comes back.
+        var here = _scene.Residents.Select(r => r.Id).ToHashSet();
+        var saved = _care.Load().Where(c => here.Contains(c.Id) && _restored.Add(c.Id)).ToArray();
         var before = saved.ToDictionary(c => c.Id);
         _scene.Life.Restore(saved, now);
         SetUpDaycareAndWilds();
@@ -627,9 +630,10 @@ public sealed class PokeparkPage : ContentPage, IPadHandler, IPadStickHandler
             }
             if (choice == "Invite Pokémon") await PokeparkCardOverlay.ShowDialogueAsync(_host, "Park guide", "Open a Pokémon’s action menu in your save boxes or Bank, then choose Send to Poképark. Its original stays right where it is.");
             else if (choice == "Empty park" && _scene.Residents.Count > 0 &&
-                     await PadMenu.ConfirmAsync(_host, "Empty the park?", $"Remove all {_scene.Residents.Count} residents from Poképark? Their original Pokémon stay in their save or Bank.", "Empty park"))
+                     await PadMenu.ConfirmAsync(_host, "Empty the park?", $"Remove all {_scene.Residents.Count} residents from Poképark? Their original Pokémon stay in their save or Bank, and they will remember the park if they come back.", "Empty park"))
             {
-                _park.RemoveAllVisitors();
+                _park.RemoveAllVisitors(remember: true);
+                _restored.Clear();
                 Reload();
             }
             else if (choice == "Widget help")
@@ -984,8 +988,8 @@ public sealed class PokeparkPage : ContentPage, IPadHandler, IPadStickHandler
             }
             if (action == "leave")
             {
-                if (await PadMenu.ConfirmAsync(_host, "Leave the park?", $"Remove {mon.Name} from this meadow? Its original stays in its box. You can invite it again anytime.", "Leave park"))
-                { _park.RemoveVisitor(mon.Id); _care.Remove(mon.Id); _daycare.Forget(mon.Id); Reload(); }
+                if (await PadMenu.ConfirmAsync(_host, "Leave the park?", $"Remove {mon.Name} from this meadow? Its original stays in its box. Invite it again anytime: it will remember the park.", "Leave park"))
+                { _park.RemoveVisitor(mon.Id, remember: true); _restored.Remove(mon.Id); _daycare.Forget(mon.Id); Reload(); }
                 return;
             }
             if (action.StartsWith("snack:", StringComparison.Ordinal) && int.TryParse(action[6..], out var flavor))

@@ -19,6 +19,11 @@ public static class ParkIdentity
         ? $"gb{pk.ID32:X8}{pk.IV_ATK:X}{pk.IV_DEF:X}{pk.IV_SPE:X}{pk.IV_SPA:X}"
         : $"id{pk.ID32:X8}{pk.PID:X8}{pk.EncryptionConstant:X8}";
 
+    /// <summary>The identity a save resident's id ends with (save:document:box:slot:identity), or null for
+    /// a bank resident, an auto-filled one (no fifth part) or one sent before identities were kept.</summary>
+    public static string? InResidentId(string residentId) =>
+        residentId.Split(':') is ["save", _, _, _, var last] && !IsLegacyFingerprint(last) ? last : null;
+
     /// <summary>Stays and residents recorded before identities were kept a SHA-256 of the whole
     /// Pokémon: 64 hex digits, which no identity key is.</summary>
     public static bool IsLegacyFingerprint(string recorded) =>

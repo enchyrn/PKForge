@@ -7,7 +7,7 @@ using PKForge.Engine;
 namespace PKForge.App.Services;
 
 public sealed record ParkPokemon(string Id, int Species, int Form, bool Shiny, string Name, string Source,
-    string GameName = "", string TrainerName = "", string Origin = "");
+    string GameName = "", string TrainerName = "", string Origin = "", string? Identity = null);
 public enum PokeparkSource { Both, Bank, Save, Disabled }
 public sealed record PokeparkSettings
 {
@@ -170,10 +170,11 @@ public sealed class PokeparkService(IBankService bank, ISaveSessionService saves
     {
         var entry = bank.GetAll().FirstOrDefault(e => e.Id == id);
         if (entry is null || entry.Info.Species <= 0) return "This Pokémon is no longer in the bank.";
-        return AddVisitor(new ParkPokemon($"bank:{entry.Id:N}", entry.Info.Species, entry.Info.Form,
+        var visitor = new ParkPokemon($"bank:{entry.Id:N}", entry.Info.Species, entry.Info.Form,
             entry.Info.Shiny, Name(entry.Info.Nickname, entry.Info.Species),
             $"Bank · Box {entry.Box + 1} · Slot {entry.Slot + 1}",
-            GameName: $"Gen {entry.Info.Generation}", TrainerName: "", Origin: entry.Info.SourceName));
+            GameName: $"Gen {entry.Info.Generation}", TrainerName: "", Origin: entry.Info.SourceName);
+        return AddVisitor(visitor, returning: Departed.Any(p => p.Id == visitor.Id));
     }
 
     public string AddSaveVisitor(int box, int slot)
@@ -191,10 +192,14 @@ public sealed class PokeparkService(IBankService bank, ISaveSessionService saves
         // Keyed by who it is, not its bytes: playing on, or moving it to another box, doesn't make it a new resident.
         if (LoadRoster().FirstOrDefault(p => IsResident(p, documentId, identity)) is { } already)
             return $"{already.Name} already lives in Poképark.";
-        return AddVisitor(new ParkPokemon($"save:{documentId}:{box}:{slot}:{identity}", detail.Species,
+        var visitor = new ParkPokemon($"save:{documentId}:{box}:{slot}:{identity}", detail.Species,
             detail.Form, detail.IsShiny, string.IsNullOrWhiteSpace(detail.Nickname) ? detail.SpeciesName : detail.Nickname,
             $"{document.DisplayName} · {(box < 0 ? "Party" : $"Box {box + 1}")} · Slot {slot + 1}",
-            GameName: $"Gen {session.Generation}", TrainerName: session.GetTrainer().Name, Origin: document.DisplayName));
+            GameName: $"Gen {session.Generation}", TrainerName: session.GetTrainer().Name, Origin: document.DisplayName, Identity: identity);
+        // One that lived here before comes back under its old id, so its care, bond and friendships are its own again.
+        if (Departed.FirstOrDefault(p => IsResident(p, documentId, identity)) is { } back)
+            return AddVisitor(visitor with { Id = back.Id }, returning: true);
+        return AddVisitor(visitor);
     }
 
     private readonly Dictionary<string, int> _natures = new();
@@ -272,10 +277,10 @@ public sealed class PokeparkService(IBankService bank, ISaveSessionService saves
                 Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(open.DocumentId)))[..16] == document &&
                 int.TryParse(boxText, out var box) && int.TryParse(slotText, out var slot))
             {
-                var identity = parts.Length > 4 && !ParkIdentity.IsLegacyFingerprint(parts[4]) ? parts[4] : null;
+                var identity = mon.Identity ?? ParkIdentity.InResidentId(mon.Id);
                 if (identity is null)
                 {
-                    // A resident from before identities: the Pokémon of its species in the slot it came from.
+                    // A resident from before identities, not yet given one: the Pokémon of its species in the slot it came from.
                     if (session.ReadEntity(box, slot) is { } detail && detail.Species == mon.Species)
                     {
                         var export = session.ExportSlot(box, slot);
@@ -303,32 +308,58 @@ public sealed class PokeparkService(IBankService bank, ISaveSessionService saves
         return null;
     }
 
-    public bool RemoveVisitor(string id)
+    /// <summary>Takes a resident out of the park. With <paramref name="remember"/> (it left; it wasn't
+    /// released or deleted) the park remembers it, so sending it back restores the same resident.</summary>
+    public bool RemoveVisitor(string id, bool remember = false)
     {
         var roster = LoadRoster();
-        if (!roster.Any(p => p.Id == id)) return false;
+        if (roster.FirstOrDefault(p => p.Id == id) is not { } leaving) return false;
+        if (remember) Write(DepartedKey, ParkDepartures.Remember(Departed, leaving, p => p.Id));
         SaveRoster(roster.Where(p => p.Id != id).ToArray());
         Write(AutoFillSuppressedKey, true);
         return true;
     }
 
-    public int RemoveAllVisitors()
+    public int RemoveAllVisitors(bool remember = false)
     {
-        var count = LoadRoster().Count;
-        if (count > 0) SaveRoster([]);
+        var roster = LoadRoster();
+        if (remember)
+            Write(DepartedKey, roster.Aggregate(Departed, (departed, leaving) => ParkDepartures.Remember(departed, leaving, p => p.Id)));
+        if (roster.Count > 0) SaveRoster([]);
         Write(AutoFillSuppressedKey, true);
-        return count;
+        return roster.Count;
+    }
+
+    /// <summary>Gives residents that have no identity yet (sent before identities were kept, or
+    /// auto-filled) the identity of the Pokémon they came from, once their save is open: from then on
+    /// they are followed when moved or evolved, and recognised when they come back.</summary>
+    public int RememberIdentities()
+    {
+        var learned = 0;
+        var roster = LoadRoster().Select(p =>
+        {
+            if (p.Identity is not null || !p.Id.StartsWith("save:", StringComparison.Ordinal) ||
+                ParkIdentity.InResidentId(p.Id) is not null ||
+                SourceOf(p) is not { } source || ParkIdentity.Of(source.Data, source.Format) is not { } identity) return p;
+            learned++;
+            return p with { Identity = identity };
+        }).ToArray();
+        if (learned > 0) SaveRoster(roster);
+        return learned;
     }
 
     /// <summary>Whether <paramref name="resident"/> is that Pokémon of that save: by its identity, or, for one
     /// sent before identities were kept, by the Pokémon its slot still holds.</summary>
     private bool IsResident(ParkPokemon resident, string documentId, string identity) =>
         resident.Id.StartsWith($"save:{documentId}:", StringComparison.Ordinal) &&
-        (resident.Id.EndsWith($":{identity}", StringComparison.Ordinal) ||
-         (ParkIdentity.IsLegacyFingerprint(resident.Id[(resident.Id.LastIndexOf(':') + 1)..]) &&
-          SourceOf(resident) is { } source && ParkIdentity.Of(source.Data, source.Format) == identity));
+        ((resident.Identity ?? ParkIdentity.InResidentId(resident.Id)) is { } known
+            ? known == identity
+            : SourceOf(resident) is { } source && ParkIdentity.Of(source.Data, source.Format) == identity);
 
-    private string AddVisitor(ParkPokemon pokemon)
+    private const string DepartedKey = "pkforge.pokepark.departed.v1";
+    private static IReadOnlyList<ParkPokemon> Departed => Read<ParkPokemon[]>(DepartedKey) ?? [];
+
+    private string AddVisitor(ParkPokemon pokemon, bool returning = false)
     {
         var roster = LoadRoster();
         if (roster.Any(p => p.Id == pokemon.Id)) return $"{pokemon.Name} already lives in Poképark.";
@@ -336,7 +367,9 @@ public sealed class PokeparkService(IBankService bank, ISaveSessionService saves
             return $"Poképark has {MaximumResidents} residents. Open the park and remove a resident before adding another.";
         Write(AutoFillSuppressedKey, false);
         SaveRoster(roster.Append(pokemon).ToArray());
-        return $"{pokemon.Name} now lives in Poképark! Your original Pokémon stays in its save or bank.";
+        if (!returning) return $"{pokemon.Name} now lives in Poképark! Your original Pokémon stays in its save or bank.";
+        Write(DepartedKey, ParkDepartures.Forget(Departed, pokemon.Id, p => p.Id));
+        return $"{pokemon.Name} is back in Poképark, and remembers its time here! Your original Pokémon stays in its save or bank.";
     }
 
     private static void SaveRoster(IReadOnlyList<ParkPokemon> roster)
