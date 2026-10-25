@@ -1,5 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android" android:installLocation="auto">
   <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
-  <application android:label="PKForge" android:icon="@mipmap/pkforge" android:roundIcon="@mipmap/pkforge_round" android:allowBackup="true" android:supportsRtl="true" />
+  <!-- No android:label here: the build writes $(ApplicationTitle) onto this element, so the
+       release shows "PKForge Fork" and the diagnostic build shows "PKForge Diagnostics". -->
+  <application android:icon="@mipmap/pkforge" android:roundIcon="@mipmap/pkforge_round" android:allowBackup="true" android:supportsRtl="true" />
 </manifest>

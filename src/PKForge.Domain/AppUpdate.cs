@@ -23,7 +23,7 @@ public enum AppUpdateInstallResult
 /// <summary>Pure release-channel rules. Network and platform services stay in the app layer.</summary>
 public static class AppUpdateRules
 {
-    /// <summary>Standard release tags are vMAJOR.MINOR.PATCH; build metadata is ignored.</summary>
+    /// <summary>Release tags are vMAJOR.MINOR.PATCH with an optional SemVer prerelease (such as -fork.1); build metadata is ignored and a prerelease sorts below its release.</summary>
     public static bool IsNewerVersion(string installed, string candidate)
     {
         if (!TryParse(installed, out var current) || !TryParse(candidate, out var next))
@@ -33,7 +33,31 @@ public static class AppUpdateRules
             return core > 0;
         if (next.Prerelease.Length == 0 || current.Prerelease.Length == 0)
             return next.Prerelease.Length == 0 && current.Prerelease.Length != 0;
-        return string.CompareOrdinal(next.Prerelease, current.Prerelease) > 0;
+        return ComparePrerelease(next.Prerelease, current.Prerelease) > 0;
+    }
+
+    /// <summary>SemVer precedence for prerelease tags such as fork.9 vs fork.10: dot-separated
+    /// identifiers compare left to right, numeric ones as numbers (and below alphanumeric ones),
+    /// and a shorter run loses to a longer one that starts the same.</summary>
+    private static int ComparePrerelease(string left, string right)
+    {
+        var a = left.Split('.');
+        var b = right.Split('.');
+        for (var i = 0; i < Math.Min(a.Length, b.Length); i++)
+        {
+            var aNumeric = ulong.TryParse(a[i], out var aNumber);
+            var bNumeric = ulong.TryParse(b[i], out var bNumber);
+            var order = (aNumeric, bNumeric) switch
+            {
+                (true, true) => aNumber.CompareTo(bNumber),
+                (true, false) => -1,
+                (false, true) => 1,
+                _ => string.CompareOrdinal(a[i], b[i]),
+            };
+            if (order != 0)
+                return order;
+        }
+        return a.Length.CompareTo(b.Length);
     }
 
     /// <summary>Don't-remind-me applies to one release. A newer release always asks again.</summary>
@@ -49,8 +73,8 @@ public static class AppUpdateRules
         var plus = text.IndexOf('+');
         if (plus >= 0)
             text = text[..plus];
-        // PKForge release tags are stable SemVer. Strip prerelease metadata if a future
-        // tag carries it rather than treating the whole tag as incomparable.
+        // Split off the prerelease (fork tags carry one, e.g. 3.1.1-fork.1); it is kept
+        // and compared by IsNewerVersion rather than discarded.
         var dash = text.IndexOf('-');
         if (dash >= 0)
         {

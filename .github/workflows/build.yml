@@ -2,7 +2,7 @@ name: build
 
 on:
   push:
-    branches: [main]
+    branches: [main, 'gabzi/**']
     tags: ['v*']
   pull_request:
 
@@ -30,12 +30,34 @@ jobs:
         if: github.ref_type == 'tag'
         env:
           PKFORGE_ANDROID_KEYSTORE_BASE64: ${{ secrets.PKFORGE_ANDROID_KEYSTORE_BASE64 }}
+          EXPECTED_CERT_SHA256: ${{ vars.PKFORGE_RELEASE_CERT_SHA256 }}
         run: |
+          expected="${EXPECTED_CERT_SHA256//[[:space:]]/}"
+          if [[ -z "$expected" ]]; then
+            echo "Repository variable PKFORGE_RELEASE_CERT_SHA256 is empty. Set it to the release certificate's SHA-256 fingerprint before tagging."
+            exit 1
+          fi
+          if [[ ! "$expected" =~ ^([0-9A-F]{2}:){31}[0-9A-F]{2}$ ]]; then
+            echo "PKFORGE_RELEASE_CERT_SHA256 must be the SHA-256 exactly as keytool prints it: uppercase hex pairs separated by colons (AA:BB:...), 32 bytes."
+            exit 1
+          fi
           if [[ -z "$PKFORGE_ANDROID_KEYSTORE_BASE64" ]]; then
             echo "Permanent release signing secret is missing."
             exit 1
           fi
           printf '%s' "$PKFORGE_ANDROID_KEYSTORE_BASE64" | base64 --decode > "${RUNNER_TEMP}/pkforge-release.p12"
+      - name: Decode diagnostic signing key
+        if: github.ref_type != 'tag'
+        env:
+          PKFORGE_DIAGNOSTIC_KEYSTORE_BASE64: ${{ secrets.PKFORGE_DIAGNOSTIC_KEYSTORE_BASE64 }}
+        run: |
+          # Without it (e.g. pull requests from other forks) the build signs with a fresh
+          # throwaway key, and that APK can't update an installed diagnostic build.
+          if [[ -z "$PKFORGE_DIAGNOSTIC_KEYSTORE_BASE64" ]]; then
+            echo "::warning::PKFORGE_DIAGNOSTIC_KEYSTORE_BASE64 is not set; this diagnostic APK is signed with a throwaway key."
+            exit 0
+          fi
+          printf '%s' "$PKFORGE_DIAGNOSTIC_KEYSTORE_BASE64" | base64 --decode > "${RUNNER_TEMP}/pkforge-diagnostic.p12"
       - name: Build Android APK
         shell: bash
         env:
@@ -43,9 +65,25 @@ jobs:
           ANDROID_KEYSTORE_PASSWORD: ${{ secrets.PKFORGE_ANDROID_KEYSTORE_PASSWORD }}
           ANDROID_KEY_ALIAS: ${{ secrets.PKFORGE_ANDROID_KEY_ALIAS }}
           ANDROID_KEY_PASSWORD: ${{ secrets.PKFORGE_ANDROID_KEY_PASSWORD }}
+          DIAGNOSTIC_KEYSTORE_PATH: ${{ runner.temp }}/pkforge-diagnostic.p12
         run: |
+          # Non-tag builds are diagnostic builds: they embed their assemblies (a plain
+          # Debug APK relies on Fast Deployment and aborts when sideloaded) and use the
+          # .debug app ID, so they install beside the release instead of over it.
           configuration="Debug"
-          signing_args=(-p:AndroidKeyStore=false)
+          signing_args=(-p:AndroidKeyStore=false -p:DiagnosticBuild=true)
+          if [[ -f "$DIAGNOSTIC_KEYSTORE_PATH" ]]; then
+            # A stable key, so each new diagnostic build updates the installed one in place.
+            # Like Android's own debug key, its passwords are "android"; the keystore is the secret.
+            signing_args=(
+              -p:DiagnosticBuild=true
+              -p:AndroidKeyStore=true
+              -p:AndroidSigningKeyStore="$DIAGNOSTIC_KEYSTORE_PATH"
+              -p:AndroidSigningStorePass=android
+              -p:AndroidSigningKeyAlias=pkforge-fork-diagnostic
+              -p:AndroidSigningKeyPass=android
+            )
+          fi
           if [[ "$GITHUB_REF_TYPE" == "tag" ]]; then
             configuration="Release"
             signing_args=(
@@ -63,14 +101,74 @@ jobs:
         run: |
           apk=$(find src/PKForge.App/bin -name '*-Signed.apk' | head -1)
           echo "path=$apk" >> "$GITHUB_OUTPUT"
-          echo "name=PKForge-${GITHUB_REF_NAME}.apk" >> "$GITHUB_OUTPUT"
+          echo "name=PKForge-Fork-${GITHUB_REF_NAME}.apk" >> "$GITHUB_OUTPUT"
+      - name: Verify APK package and launcher label
+        env:
+          APK_PATH: ${{ steps.apk.outputs.path }}
+        run: |
+          # ApplicationTitle only reaches android:label when the manifest template has none,
+          # so check what the built APK really declares.
+          sdk="${ANDROID_HOME:-$ANDROID_SDK_ROOT}"
+          aapt2=$(find "$sdk/build-tools" -name aapt2 -type f 2>/dev/null | sort -V | tail -1)
+          if [[ -z "$aapt2" ]]; then
+            echo "aapt2 not found under '$sdk/build-tools'; cannot check the APK label."
+            exit 1
+          fi
+          package="io.github.gabzidevs.pkforge"
+          label="PKForge Fork"
+          if [[ "$GITHUB_REF_TYPE" != "tag" ]]; then
+            package="$package.debug"
+            label="PKForge Fork Diagnostics"
+          fi
+          badging=$("$aapt2" dump badging "$APK_PATH")
+          echo "$badging" | grep -E "^(package:|application-label:)"
+          echo "$badging" | grep -Fq "package: name='$package'" \
+            || { echo "APK package is not $package."; exit 1; }
+          echo "$badging" | grep -Fxq "application-label:'$label'" \
+            || { echo "APK application label is not '$label'."; exit 1; }
       - name: Verify permanent release signature
         if: github.ref_type == 'tag'
+        env:
+          EXPECTED_CERT_SHA256: ${{ vars.PKFORGE_RELEASE_CERT_SHA256 }}
         run: |
-          expected="E2:6F:3F:FF:8A:89:00:D8:5E:D8:EF:72:E1:CA:7F:50:33:D2:A5:57:98:0B:26:19:F1:1D:6D:E2:10:09:BF:D8"
-          actual=$(keytool -printcert -jarfile "${{ steps.apk.outputs.path }}" | tr -d '\r' | grep -m1 'SHA256:')
-          echo "$actual"
-          echo "$actual" | grep -Fq "$expected"
+          expected="${EXPECTED_CERT_SHA256//[[:space:]]/}"
+          if [[ -z "$expected" ]]; then
+            echo "Repository variable PKFORGE_RELEASE_CERT_SHA256 is empty. Set it to the release certificate's SHA-256 fingerprint before tagging."
+            exit 1
+          fi
+          if [[ ! "$expected" =~ ^([0-9A-F]{2}:){31}[0-9A-F]{2}$ ]]; then
+            echo "PKFORGE_RELEASE_CERT_SHA256 must be the SHA-256 exactly as keytool prints it: uppercase hex pairs separated by colons (AA:BB:...), 32 bytes."
+            exit 1
+          fi
+          line=$(keytool -printcert -jarfile "${{ steps.apk.outputs.path }}" | tr -d '\r' | grep -m1 'SHA256:')
+          echo "$line"
+          actual="${line#*SHA256:}"
+          actual="${actual//[[:space:]]/}"
+          if [[ "$actual" != "$expected" ]]; then
+            echo "Signing certificate mismatch."
+            echo "  expected: $expected"
+            echo "  actual:   $actual"
+            exit 1
+          fi
+      - name: Verify diagnostic signature
+        if: github.ref_type != 'tag'
+        env:
+          EXPECTED_CERT_SHA256: ${{ vars.PKFORGE_DIAGNOSTIC_CERT_SHA256 }}
+          DIAGNOSTIC_KEYSTORE_PATH: ${{ runner.temp }}/pkforge-diagnostic.p12
+        run: |
+          line=$(keytool -printcert -jarfile "${{ steps.apk.outputs.path }}" | tr -d '\r' | grep -m1 'SHA256:')
+          echo "$line"
+          # Only a build signed with the stable key has a fingerprint to match.
+          [[ -f "$DIAGNOSTIC_KEYSTORE_PATH" ]] || exit 0
+          expected="${EXPECTED_CERT_SHA256//[[:space:]]/}"
+          actual="${line#*SHA256:}"
+          actual="${actual//[[:space:]]/}"
+          if [[ -n "$expected" && "$actual" != "$expected" ]]; then
+            echo "Diagnostic signing certificate mismatch."
+            echo "  expected: $expected"
+            echo "  actual:   $actual"
+            exit 1
+          fi
       - uses: actions/upload-artifact@v4
         if: github.ref_type != 'tag'
         with:
@@ -79,10 +177,10 @@ jobs:
           retention-days: 3
       - name: Stage release asset
         if: github.ref_type == 'tag'
-        run: cp "${{ steps.apk.outputs.path }}" "PKForge-${GITHUB_REF_NAME}.apk"
+        run: cp "${{ steps.apk.outputs.path }}" "PKForge-Fork-${GITHUB_REF_NAME}.apk"
       - name: Release
         if: github.ref_type == 'tag'
         uses: softprops/action-gh-release@v2
         with:
-          files: PKForge-${{ github.ref_name }}.apk
+          files: PKForge-Fork-${{ github.ref_name }}.apk
           generate_release_notes: true

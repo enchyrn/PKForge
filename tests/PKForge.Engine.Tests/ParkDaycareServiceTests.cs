@@ -87,4 +87,77 @@ public sealed class ParkDaycareServiceTests
         Assert.Equal(100, ParkDaycareService.Preview(old, uint.MaxValue / 2).LevelAfter);
         Assert.Equal(0u, ParkDaycareService.Preview(Make(9, 25, 10), 5000).ExpGained);
     }
+
+    // A Gen 3 Torchic (Medium Slow) set to the exact start of a level.
+    private static PKM TorchicAt(int level)
+    {
+        var pk = Make(3, 255, level);
+        pk.EXP = Experience.GetEXP((byte)level, pk.PersonalInfo.EXPGrowth);
+        return pk;
+    }
+
+    private static uint LevelSpan(PKM pk, int level) =>
+        Experience.GetEXP((byte)(level + 1), pk.PersonalInfo.EXPGrowth) - Experience.GetEXP((byte)level, pk.PersonalInfo.EXPGrowth);
+
+    [Fact]
+    public void Gentle_takes_8_hours_a_level()
+    {
+        var pk = TorchicAt(5);
+        Assert.Equal(6, ParkDaycareService.Preview(pk, ParkDaycareService.ExpForStay(pk, TimeSpan.FromHours(8), DaycarePace.Gentle)).LevelAfter);
+        Assert.Equal(7, ParkDaycareService.Preview(pk, ParkDaycareService.ExpForStay(pk, TimeSpan.FromHours(16), DaycarePace.Gentle)).LevelAfter);
+    }
+
+    [Fact]
+    public void Gentle_part_way_through_a_level_gives_part_of_its_EXP()
+    {
+        var pk = TorchicAt(5);
+        var exp = ParkDaycareService.ExpForStay(pk, TimeSpan.FromHours(4), DaycarePace.Gentle);
+        Assert.Equal((uint)Math.Floor(LevelSpan(pk, 5) / 2.0), exp);
+        Assert.Equal(5, ParkDaycareService.Preview(pk, exp).LevelAfter);
+    }
+
+    [Fact]
+    public void Slow_takes_24_hours_a_level()
+    {
+        var pk = TorchicAt(5);
+        Assert.Equal(6, ParkDaycareService.Preview(pk, ParkDaycareService.ExpForStay(pk, TimeSpan.FromHours(24), DaycarePace.Slow)).LevelAfter);
+    }
+
+    [Fact]
+    public void Off_gives_nothing_and_Original_gives_500_an_hour()
+    {
+        var pk = TorchicAt(5);
+        Assert.Equal(0u, ParkDaycareService.ExpForStay(pk, TimeSpan.FromHours(100), DaycarePace.Off));
+        Assert.Equal(1000u, ParkDaycareService.ExpForStay(pk, TimeSpan.FromHours(2), DaycarePace.Original));
+    }
+
+    [Theory]
+    [InlineData(DaycarePace.Off)]
+    [InlineData(DaycarePace.Slow)]
+    [InlineData(DaycarePace.Gentle)]
+    [InlineData(DaycarePace.Original)]
+    public void Level_100_and_negative_stays_give_nothing(DaycarePace pace)
+    {
+        Assert.Equal(0u, ParkDaycareService.ExpForStay(Make(3, 255, 100), TimeSpan.FromHours(100), pace));
+        Assert.Equal(0u, ParkDaycareService.ExpForStay(TorchicAt(5), TimeSpan.FromHours(-5), pace));
+    }
+
+    [Fact]
+    public void A_nursery_game_gives_no_EXP_at_any_pace()
+    {
+        var pk = Make(8, 25, 10);
+        Assert.Equal(0u, ParkDaycareService.ExpForStay(pk, TimeSpan.FromHours(100), DaycarePace.Gentle));
+    }
+
+    [Fact]
+    public void A_long_stay_stops_at_level_100_and_bytes_overload_reads_the_data()
+    {
+        var pk = TorchicAt(98);
+        var exp = ParkDaycareService.ExpForStay(pk, TimeSpan.FromHours(10_000), DaycarePace.Gentle);
+        Assert.Equal(100, ParkDaycareService.Preview(pk, exp).LevelAfter);
+        var data = new byte[pk.SIZE_PARTY];
+        pk.WriteDecryptedDataParty(data);
+        Assert.Equal(exp, ParkDaycareService.ExpForStay(data, EntityBytes.FormatOf(pk), TimeSpan.FromHours(10_000), DaycarePace.Gentle));
+        Assert.Equal(0u, ParkDaycareService.ExpForStay(new byte[3], null, TimeSpan.FromHours(8), DaycarePace.Gentle));
+    }
 }

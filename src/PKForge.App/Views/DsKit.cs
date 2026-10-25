@@ -115,6 +115,8 @@ public sealed class DsFolderButton : Grid
         var tap = new TapGestureRecognizer();
         tap.Tapped += (_, _) => Tapped?.Invoke();
         GestureRecognizers.Add(tap);
+        // A menu can close while its selected row is still gliding; stop the loop with it.
+        Unloaded += (_, _) => StopMarquee();
     }
 
     public bool Selected
@@ -157,10 +159,19 @@ public sealed class DsFolderButton : Grid
         line.WidthRequest = measured;
         _gliding.Add(line);
 
-        while (_selected && generation == _marqueeGeneration)
+        while (_selected && generation == _marqueeGeneration && line.Handler is not null)
         {
             var duration = (uint)Math.Clamp(overflow * 45, 1800, 6500);
-            await line.TranslateToAsync(-overflow, 0, duration, Easing.Linear);
+            try
+            {
+                await line.TranslateToAsync(-overflow, 0, duration, Easing.Linear);
+            }
+            catch (ObjectDisposedException)
+            {
+                // The menu's MAUI context was torn down mid-glide. This is async void, so an
+                // escaping exception would take the whole app down.
+                return;
+            }
             if (!_selected || generation != _marqueeGeneration) return;
             await Task.Delay(900);
             if (!_selected || generation != _marqueeGeneration) return;

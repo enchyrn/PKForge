@@ -12,9 +12,12 @@ public sealed record ParkDaycareGrowth(int LevelBefore, int LevelAfter, uint Exp
 /// <summary>A legal egg from the Poképark daycare, ready for the Bank.</summary>
 public sealed record ParkDaycareEgg(byte[] Data, string Format, int Species, int Form);
 
+/// <summary>How fast the Poképark daycare grows a Pokémon: not at all, a level per 24 h or per 8 h, or a flat 500 EXP an hour.</summary>
+public enum DaycarePace { Off, Slow, Gentle, Original }
+
 /// <summary>
 /// The Poképark daycare against real Pokémon data, following each game's own daycare: Gen 1–7
-/// daycares give EXP (one point a step in the games, here a steady amount per hour), the
+/// daycares give EXP (one point a step in the games, here a level or a flat amount per hour depending on the <see cref="DaycarePace"/>), the
 /// Nurseries of Sword/Shield, Brilliant Diamond/Shining Pearl and Scarlet/Violet only give eggs,
 /// and Let's Go and Legends have neither. Levels are written as exact EXP, stats recalculated,
 /// moves and evolution left alone (as in the games). Eggs are PKHeX egg encounters, made for the
@@ -32,6 +35,35 @@ public static class ParkDaycareService
 
     public static ParkDaycareRules RulesFor(byte[] data, string? format) =>
         EntityBytes.Parse(data, format) is { } pk ? RulesFor(pk) : new(false, false);
+
+    /// <summary>The EXP a stay of <paramref name="stay"/> is worth at <paramref name="pace"/>: 0 for an egg, level 100, a
+    /// daycare that doesn't grow, or a negative stay. <see cref="DaycarePace.Original"/> is a flat 500 EXP an hour; Slow and
+    /// Gentle spend the time a level at a time (24 h or 8 h each), the part-way level at its own rate, until level 100.</summary>
+    public static uint ExpForStay(PKM pk, TimeSpan stay, DaycarePace pace)
+    {
+        if (pace == DaycarePace.Off || stay <= TimeSpan.Zero) return 0;
+        if (!RulesFor(pk).Grows || pk.IsEgg) return 0;
+        var growth = pk.PersonalInfo.EXPGrowth;
+        var level = Experience.GetLevel(pk.EXP, growth);
+        if (level >= Experience.MaxLevel) return 0;
+        if (pace == DaycarePace.Original) return (uint)Math.Min(uint.MaxValue / 4, stay.TotalHours * 500);
+        var hoursPerLevel = pace == DaycarePace.Slow ? 24.0 : 8.0;
+        double hours = stay.TotalHours, total = 0, at = pk.EXP;
+        for (; level < Experience.MaxLevel && hours > 0; level++)
+        {
+            double start = Experience.GetEXP((byte)level, growth), next = Experience.GetEXP((byte)(level + 1), growth);
+            var left = next - at;
+            var hoursToFinish = hoursPerLevel * left / (next - start);
+            if (hours < hoursToFinish) { total += hours * (next - start) / hoursPerLevel; break; }
+            total += left;
+            at = next;
+            hours -= hoursToFinish;
+        }
+        return (uint)Math.Floor(total);
+    }
+
+    public static uint ExpForStay(byte[] data, string? format, TimeSpan stay, DaycarePace pace) =>
+        EntityBytes.Parse(data, format) is { } pk ? ExpForStay(pk, stay, pace) : 0;
 
     /// <summary>The growth <paramref name="exp"/> EXP would bring, capped at level 100.</summary>
     public static ParkDaycareGrowth Preview(PKM pk, uint exp)

@@ -1,3 +1,21 @@
+## This fork
+
+This is a personal fork of PKForge, kept for playing Pokémon Emerald in PokeDaisy with PKForge as the companion. It changes three things:
+
+- **Daycare pace.** Blissey's daycare grows a Pokémon by levels instead of a flat 500 EXP an hour. The default is about a level every 8 hours; Off, Slow (a level a day) and Original (the old flat rate) are in Blissey's menu, where one row cycles Off, Slow, Gentle, Original.
+- **PokeDaisy backups are skipped.** The scanner no longer reads PokeDaisy's `pokedaisy-backups` folder, so old backups don't show up as extra games or duplicate your Living Dex.
+- **It installs beside the official app.** Own app ID (`io.github.gabzidevs.pkforge`), own name ("PKForge Fork"), and update checks against this fork's releases.
+
+Because it installs beside the official app, it starts with empty app data: your Bank and Poképark are not shared. Link your emulator folders again to get your saves back in.
+
+**Install:** download the APK from the [latest release](https://github.com/gabzidevs/PKForge/releases/latest), or add the repo to [Obtainium](https://github.com/ImranR98/Obtainium) and let it track releases:
+
+[![Get it on Obtainium](https://img.shields.io/badge/Obtainium-Add%20this%20fork-2B4E95)](https://apps.obtainium.imranr.dev/redirect?r=obtainium://add/https://github.com/gabzidevs/PKForge)
+
+More in [docs/fork](docs/fork/README.md). Everything below is the upstream README.
+
+---
+
 <p align="center"><img src="docs/images/logo-transparent.png" alt="PKForge" width="140" /></p>
 
 <p align="center"><b>A Pokémon save editor and bank for Android, with support for dual-screen handhelds.</b></p>

@@ -82,4 +82,31 @@ public sealed class EmulatorSaveHeuristicsTests
         Assert.Equal("b", result[0].DocumentId);
         Assert.Equal("a", result[1].DocumentId);
     }
+
+    [Theory]
+    [InlineData("pokedaisy-backups")]
+    [InlineData("PokeDaisy-Backups")]
+    public void PokeDaisyBackupsAreNeverScannedForAnyEmulator(string folder)
+    {
+        foreach (var kind in Enum.GetValues<EmulatorKind>())
+            Assert.True(EmulatorSaveHeuristics.IsPrunedDirectory(folder, kind), $"{folder} not pruned for {kind}");
+    }
+
+    [Fact]
+    public void StatesFolderIsPruned() =>
+        Assert.True(EmulatorSaveHeuristics.IsPrunedDirectory("states", EmulatorKind.RetroArch));
+
+    [Fact]
+    public void RomsFolderIsPrunedForRetroArchOnly()
+    {
+        foreach (var kind in Enum.GetValues<EmulatorKind>())
+            Assert.Equal(kind == EmulatorKind.RetroArch, EmulatorSaveHeuristics.IsPrunedDirectory("roms", kind));
+    }
+
+    [Fact]
+    public void SavesFolderIsNotPruned()
+    {
+        foreach (var kind in Enum.GetValues<EmulatorKind>())
+            Assert.False(EmulatorSaveHeuristics.IsPrunedDirectory("saves", kind));
+    }
 }

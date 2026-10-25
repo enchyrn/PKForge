@@ -48,3 +48,4 @@ src/PKForge.App/Resources/Raw/sgdb.key
 /docs/*.md
 dist-diagnostic/
 dist/
+.superpowers/
