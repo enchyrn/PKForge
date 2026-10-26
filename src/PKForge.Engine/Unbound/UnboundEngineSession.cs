@@ -112,7 +112,8 @@ internal sealed class UnboundEngineSession : ISaveEngineSession
         foreach (var copy in AllSectionOffsets(_data, PartySection))
         {
             if (copy == PartyBase) continue;
-            _data.AsSpan(PartyBase, SectorSize).CopyTo(_data.AsSpan(copy));
+            // The data only: each copy keeps its own footer, so the older save slot keeps the counter the game wrote.
+            _data.AsSpan(PartyBase, SectorFooter).CopyTo(_data.AsSpan(copy));
         }
         foreach (var copy in AllSectionOffsets(_data, PartySection))
             WriteChecksum(_data, copy, ChecksumLength);
@@ -728,6 +729,22 @@ internal sealed class UnboundEngineSession : ISaveEngineSession
                 : new SlotSummary(-1, slot, null, null, false, true));
         }
         return new SaveSnapshot(SnapshotTag, 3, _originalBytes.ToArray(), slots, displayName);
+    }
+
+    /// <summary>The Poképark daycare's EXP: added to the Pokémon's EXP on Unbound's own curve (capped at level 100) and
+    /// committed like any edit. EXP only: a party Pokémon's level and stats are left to the game, which catches up on
+    /// levels after its next battle; a boxed one reads its level from its EXP.</summary>
+    public PKForge.Engine.ParkDaycareGrowth AddDaycareExperience(int box, int slot, uint exp)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        var mon = TryMon(box, slot);
+        if (mon is not { LooksValid: true }) throw new InvalidOperationException("That slot is empty now.");
+        var growth = PKForge.Engine.ParkDaycareService.PreviewUnbound(mon.Species, mon.Experience, exp);
+        if (growth.ExpGained == 0) return growth;
+        mon.Experience += growth.ExpGained;
+        if (box == -1) CommitParty();
+        else CommitPc(ResolveSlot(box, slot));
+        return growth;
     }
 
     public ReadOnlyMemory<byte> Serialize()

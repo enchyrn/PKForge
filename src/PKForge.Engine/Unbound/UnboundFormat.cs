@@ -18,6 +18,8 @@ internal static class UnboundFormat
 {
     public const int FileSize = 0x20_000;
     public const int SectorSize = 0x1000;
+    /// <summary>Where a sector's footer starts (section id, checksum, signature, save counter).</summary>
+    public const int SectorFooter = 0xFF4;
     public const int SectorCount = FileSize / SectorSize;
     public const int SectionCount = 14;
 

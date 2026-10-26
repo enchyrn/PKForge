@@ -3,21 +3,6 @@ using Xunit;
 
 namespace PKForge.Engine.Tests;
 
-public sealed class ParkPickupTests
-{
-    [Fact]
-    public void A_stay_that_would_grow_waits_for_its_save_to_be_opened() =>
-        Assert.True(ParkDaycareService.WaitsForSave(fromSave: true, saveOpen: false, writesBack: true, DaycarePace.Gentle));
-
-    [Theory]
-    [InlineData(false, false, true, DaycarePace.Gentle)] // a Bank resident needs no save
-    [InlineData(true, true, true, DaycarePace.Gentle)]   // its save is open: it can be written
-    [InlineData(true, false, false, DaycarePace.Gentle)] // writing back is off: nothing to wait for
-    [InlineData(true, false, true, DaycarePace.Off)]     // pace Off: it earns nothing
-    public void Otherwise_the_pickup_goes_ahead(bool fromSave, bool saveOpen, bool writesBack, DaycarePace pace) =>
-        Assert.False(ParkDaycareService.WaitsForSave(fromSave, saveOpen, writesBack, pace));
-}
-
 public sealed class ParkStayIdentityTests
 {
     private const string Sent = "id1A2B3C4DA7AF64E9A7AF64E9";
@@ -42,20 +27,22 @@ public sealed class ParkStayIdentityTests
 public sealed class ParkPickupOutcomeTests
 {
     [Theory]
-    [InlineData(PKForge.Engine.RadicalRed.CfruEntity.Unbound)]
     [InlineData(PKForge.Engine.RadicalRed.CfruEntity.RadicalRed)]
     [InlineData(PKForge.Engine.RadicalRed.CfruEntity.GsChronicles)]
-    public void A_CFRU_hack_s_Pokemon_is_not_written_back_yet(string format) =>
+    public void Radical_Red_and_GS_Chronicles_aren_t_written_back_yet(string format) =>
         Assert.False(ParkDaycareService.WritesBackTo(format));
 
-    [Fact]
-    public void An_official_game_s_Pokemon_is_written_back() =>
-        Assert.True(ParkDaycareService.WritesBackTo("PK3"));
+    [Theory]
+    [InlineData("PK3")]
+    [InlineData(PKForge.Engine.RadicalRed.CfruEntity.Unbound)]
+    public void Official_games_and_Unbound_are_written_back(string format) =>
+        Assert.True(ParkDaycareService.WritesBackTo(format));
 
     [Theory]
     [InlineData(DaycarePickup.Written, true)]
     [InlineData(DaycarePickup.NothingToWrite, true)]
     [InlineData(DaycarePickup.ParkMemory, true)]
+    [InlineData(DaycarePickup.Owed, true)]
     [InlineData(DaycarePickup.NotTheSame, false)]   // the time isn't lost: picked up again once it's back in its save
     [InlineData(DaycarePickup.WriteFailed, false)]
     public void Only_a_refused_or_failed_write_keeps_the_stay(DaycarePickup outcome, bool ends) =>

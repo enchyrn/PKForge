@@ -736,6 +736,14 @@ public sealed class PokeparkPage : ContentPage, IPadHandler, IPadStickHandler
                         : $"Here {Stayed(time)}.";
                     options.Add(new PadOption($"Pick up {Named(guest)}", IconPath: "move", Detail: detail));
                 }
+                // Blissey's notebook: stays that ended before their EXP could be written, settled once their saves are open.
+                var owed = PKForge.Engine.ParkNotebook.Owed(_daycare.Notebook);
+                var settleable = _daycare.Settleable(_scene.Residents);
+                if (_daycare.Notebook.Count > 0)
+                    options.Add(new PadOption("Blissey's notebook", IconPath: "info", Detail:
+                        settleable.Count > 0 ? $"{settleable.Count} of {owed.Count} stays can be settled now."
+                        : owed.Count > 0 ? $"{owed.Count} {(owed.Count == 1 ? "stay waits" : "stays wait")} for {(owed.Count == 1 ? "its save" : "their saves")} to be opened."
+                        : "Every stay is settled."));
                 if (guests.Length < PokeparkDaycareService.Capacity && _scene.Residents.Count > guests.Length)
                     options.Add(new PadOption("Leave a Pokémon here", IconPath: "park", Detail: $"{guests.Length} of {PokeparkDaycareService.Capacity} places taken."));
                 options.Add(new PadOption($"Write back to saves: {(writes ? "On" : "Off")}", IconPath: "settings",
@@ -745,6 +753,14 @@ public sealed class PokeparkPage : ContentPage, IPadHandler, IPadStickHandler
                 var note = guests.Length == 0 ? "Blissey keeps the daycare by the cabin, and Audino helps." : $"Looking after {string.Join(", ", guests.Select(g => g.Name))}.";
                 var choice = await PadMenu.ShowAsync(_host, "Blissey's daycare", note, options.ToArray());
                 if (choice is null) return;
+                if (choice == "Blissey's notebook")
+                {
+                    var line = settleable.Count > 0 ? await _daycare.SettleAsync(_scene.Residents)
+                        : owed.Count > 0 ? $"Waiting in the notebook: {string.Join("; ", owed.Select(n => $"{n.Name}, {Stayed(TimeSpan.FromHours(n.Hours))} on {n.Ended.LocalDateTime:d MMM}"))}. Open their saves and I'll settle them."
+                        : $"Everything in my notebook is settled. The last: {string.Join("; ", _daycare.Notebook.TakeLast(3).Select(n => $"{n.Name}, +{n.ExpWritten} EXP"))}.";
+                    await PokeparkCardOverlay.ShowDialogueAsync(_host, "Blissey", line, () => _walking.GetPortrait(242, 0, false, "Happy"));
+                    continue;
+                }
                 if (choice == "Take the egg" && egg is { } taken)
                 {
                     _scene.Life.TakeEgg();

@@ -21,7 +21,8 @@ public sealed class PokeparkDaycareService(PokeparkService park, IBankService ba
     private const string Key = "pkforge.pokepark.daycare.v1";
     public const int Capacity = 4;
 
-    private sealed record State(ParkStay[] Stays, string[]? Egg);
+    // Notebook: Blissey's notebook (ParkNotebook), null in states saved before it existed.
+    private sealed record State(ParkStay[] Stays, string[]? Egg, ParkNote[]? Notebook = null);
 
     private State Load()
     {
@@ -32,6 +33,9 @@ public sealed class PokeparkDaycareService(PokeparkService park, IBankService ba
     private static void Save(State state) => Preferences.Default.Set(Key, JsonSerializer.Serialize(state));
 
     public IReadOnlyList<ParkStay> Stays => Load().Stays;
+
+    /// <summary>Blissey's notebook: stays whose EXP couldn't be written when they ended, owed first, then settled ones.</summary>
+    public IReadOnlyList<ParkNote> Notebook => Load().Notebook ?? [];
 
     public bool IsGuest(string id) => Load().Stays.Any(s => s.ResidentId == id);
 
@@ -97,14 +101,16 @@ public sealed class PokeparkDaycareService(PokeparkService park, IBankService ba
         if (state.Stays.FirstOrDefault(s => s.ResidentId == mon.Id) is not { } stay) return $"{mon.Name} is not at the daycare.";
         var time = DateTimeOffset.Now - stay.Since;
         var stayed = Duration(time);
-        if (ParkDaycareService.WaitsForSave(mon.Id.StartsWith("save:", StringComparison.Ordinal), park.SaveIsOpenFor(mon),
-                WritesBack(park.Settings), park.Settings.DaycarePace))
-            return $"{mon.Name} has stayed {stayed}. Open its save in PKForge first, then pick it up: Blissey keeps it here until then, so the time counts.";
         var (message, outcome) = await GrowAsync(mon, stay, time, stayed);
         // A refused or failed write keeps the stay: the time isn't lost, and it can be picked up again.
         if (!ParkDaycareService.EndsStay(outcome)) return message;
         var left = Load();
-        Save(left with { Stays = left.Stays.Where(s => s.ResidentId != mon.Id).ToArray(), Egg = left.Egg is { } egg && egg.Contains(mon.Id) ? null : left.Egg });
+        // A stay whose EXP couldn't be written goes in the notebook, settled once its save is open.
+        var notebook = ParkDaycareService.GoesInNotebook(outcome)
+            ? ParkNotebook.Add(left.Notebook ?? [], new ParkNote(mon.Id, ParkIdentity.ForStay(stay.Fingerprint, mon.Identity, mon.Id), mon.Name,
+                park.SourceOf(mon)?.Format, stay.Since, DateTimeOffset.Now, time.TotalHours, park.Settings.DaycarePace)).ToArray()
+            : left.Notebook;
+        Save(left with { Stays = left.Stays.Where(s => s.ResidentId != mon.Id).ToArray(), Egg = left.Egg is { } egg && egg.Contains(mon.Id) ? null : left.Egg, Notebook = notebook });
         return message;
     }
 
@@ -120,9 +126,15 @@ public sealed class PokeparkDaycareService(PokeparkService park, IBankService ba
         var settings = park.Settings;
         var source = park.SourceOf(mon);
         var hello = $"Blissey brings {mon.Name} back. It stayed {stayed}.";
-        if (source is null) return ($"{hello} Its save is not open, so the time it spent here stays a park memory.", DaycarePickup.ParkMemory);
+        var owes = WritesBack(settings) && settings.DaycarePace != DaycarePace.Off;
+        if (source is null)
+            return owes
+                ? ($"{hello} Its save is not open, so Blissey writes its stay in her notebook. Open its save and settle it from her menu.", DaycarePickup.Owed)
+                : ($"{hello} Its save is not open, so the time it spent here stays a park memory.", DaycarePickup.ParkMemory);
         if (!ParkDaycareService.WritesBackTo(source.Format))
-            return ($"{hello} Its game can't take daycare EXP from PKForge yet, so the time it spent here stays a park memory.", DaycarePickup.ParkMemory);
+            return owes
+                ? ($"{hello} Its game can't take daycare EXP from PKForge yet, so Blissey writes its stay in her notebook until it can.", DaycarePickup.Owed)
+                : ($"{hello} Its game can't take daycare EXP from PKForge yet, so the time it spent here stays a park memory.", DaycarePickup.ParkMemory);
         var rules = ParkDaycareService.RulesFor(source.Data, source.Format);
         var exp = ParkDaycareService.ExpForStay(source.Data, source.Format, time, settings.DaycarePace);
         if (!rules.Grows) return ($"{hello} {(rules.Breeds ? "Its game has a Nursery, which doesn't train" : "Its game has no daycare")}, so it comes back as it was, only happier.", DaycarePickup.NothingToWrite);
@@ -135,22 +147,78 @@ public sealed class PokeparkDaycareService(PokeparkService park, IBankService ba
         if (!WritesBack(settings)) return ($"{hello} It grew {grew} here. Writing back is off, so that stays in the park.", DaycarePickup.ParkMemory);
         if (!ParkIdentity.IsSameIndividual(ParkIdentity.ForStay(stay.Fingerprint, mon.Identity, mon.Id), source.Data, source.Format))
             return ($"{mon.Name} has stayed {stayed} and grew {grew}, but the Pokémon in its save isn't the one you left. Blissey keeps it here: pick it up again once it's back in its save.", DaycarePickup.NotTheSame);
+        return await WriteAsync(mon, source, exp, grew) is not { } failure
+            ? ($"{hello} It grew {grew}, and {Updated(source)}.{CatchUp(source, preview)}", DaycarePickup.Written)
+            : ($"{mon.Name} has stayed {stayed} and grew {grew}, but {failure} Blissey keeps it here so the time isn't lost.", DaycarePickup.WriteFailed);
+    }
+
+    private static string Updated(PokeparkService.ParkSource source) =>
+        source.BankId is null ? "its save is updated. A restore point was made first" : "its Bank entry is updated";
+
+    /// <summary>Unbound gets EXP only: a party Pokémon shows its new level after its next battle.</summary>
+    private static string CatchUp(PokeparkService.ParkSource source, ParkDaycareGrowth growth) =>
+        source.Format == PKForge.Engine.RadicalRed.CfruEntity.Unbound && source.BankId is null && source.Box == -1 && growth.LevelAfter > growth.LevelBefore
+            ? " The game shows its new level after its next battle." : "";
+
+    /// <summary>Writes <paramref name="exp"/> to the Pokémon behind <paramref name="source"/>, in its Bank entry or its open
+    /// save. Null when written, else why not (a sentence ending in a full stop).</summary>
+    private async Task<string?> WriteAsync(ParkPokemon mon, PokeparkService.ParkSource source, uint exp, string grew)
+    {
         if (source.BankId is { } id)
         {
             var entry = bank.GetAll().FirstOrDefault(e => e.Id == id);
-            if (entry is null || ParkDaycareService.GrowBytes(source.Data, source.Format, exp) is not { } grown)
-                return ($"{mon.Name} has stayed {stayed} and grew {grew}, but its Bank entry could not be updated. Blissey keeps it here so the time isn't lost.", DaycarePickup.WriteFailed);
+            if (entry is null || ParkDaycareService.GrowBytes(source.Data, source.Format, exp) is not { } grown) return "its Bank entry could not be updated.";
             bank.Replace(id, grown.Data, engine.TryDescribeEntity(grown.Data, entry.Info.SourceName, source.Format) ?? entry.Info);
-            return ($"{hello} It grew {grew}, and its Bank entry is updated.", DaycarePickup.Written);
+            return null;
         }
         var written = await boxes.RunMutationAsync(session =>
         {
             var growth = ParkDaycareService.GrowSlot(session, source.Box, source.Slot, exp);
             return new GenerationOutcome(true, $"{mon.Name} grew to level {growth.LevelAfter} at the Poképark daycare.");
         }, source.Slot, refreshSlot: false, changeDescription: $"Poképark daycare: {mon.Name} grew {grew}", action: SaveAction.EditMon);
-        return written
-            ? ($"{hello} It grew {grew}, and its save is updated. A restore point was made first.", DaycarePickup.Written)
-            : ($"{mon.Name} has stayed {stayed} and grew {grew}, but the save could not be written: {boxes.Status} Blissey keeps it here so the time isn't lost.", DaycarePickup.WriteFailed);
+        return written ? null : $"the save could not be written: {boxes.Status}";
+    }
+
+    /// <summary>The owed notes Blissey can settle now: their Pokémon are in the park with their saves (or Bank entries)
+    /// open, in a game PKForge can write, and writing back is on.</summary>
+    public IReadOnlyList<(ParkNote Note, ParkPokemon Mon)> Settleable(IEnumerable<ParkPokemon> residents)
+    {
+        if (!WritesBack(park.Settings)) return [];
+        var roster = residents.ToDictionary(r => r.Id);
+        return ParkNotebook.Owed(Notebook)
+            .Where(n => roster.ContainsKey(n.ResidentId) && park.SourceOf(roster[n.ResidentId]) is { } source && ParkDaycareService.WritesBackTo(source.Format))
+            .Select(n => (n, roster[n.ResidentId])).ToArray();
+    }
+
+    /// <summary>Settles every note it can: each stay's EXP reckoned on the Pokémon as it is now and written to the same
+    /// individual. A note whose Pokémon isn't the one that stayed, or whose write fails, stays owed.</summary>
+    public async Task<string> SettleAsync(IEnumerable<ParkPokemon> residents)
+    {
+        var lines = new List<string>();
+        foreach (var (note, mon) in Settleable(residents))
+        {
+            if (park.SourceOf(mon) is not { } source) continue;
+            var when = $"its {Duration(TimeSpan.FromHours(note.Hours))} from {note.Ended.LocalDateTime:d MMM}";
+            if (!ParkIdentity.IsSameIndividual(ParkIdentity.ForStay(note.Identity, mon.Identity, mon.Id), source.Data, source.Format))
+            {
+                lines.Add($"{mon.Name}: the Pokémon in its save isn't the one that stayed, so {when} waits.");
+                continue;
+            }
+            var exp = ParkDaycareService.ExpForStay(source.Data, source.Format, TimeSpan.FromHours(note.Hours), note.Pace);
+            var preview = ParkDaycareService.Preview(source.Data, source.Format, exp);
+            var grew = preview.LevelAfter > preview.LevelBefore ? $"from level {preview.LevelBefore} to {preview.LevelAfter}" : $"by {preview.ExpGained} EXP";
+            if (preview.ExpGained > 0 && await WriteAsync(mon, source, exp, grew) is { } failure)
+            {
+                lines.Add($"{mon.Name}: {failure} {char.ToUpper(when[0])}{when[1..]} waits.");
+                continue;
+            }
+            var state = Load();
+            Save(state with { Notebook = ParkNotebook.Settle(state.Notebook ?? [], note, DateTimeOffset.Now, preview.ExpGained).ToArray() });
+            lines.Add(preview.ExpGained > 0
+                ? $"{mon.Name} grew {grew} for {when}.{CatchUp(source, preview)}"
+                : $"{mon.Name}: {when} was already as much as it could take.");
+        }
+        return lines.Count == 0 ? "There's nothing Blissey can settle right now." : $"Blissey settles her notebook. {string.Join(" ", lines)}";
     }
 
     /// <summary>Whether two guests could have an egg, by their real data (false when either can't be read).</summary>
