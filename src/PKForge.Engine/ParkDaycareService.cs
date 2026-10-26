@@ -111,6 +111,10 @@ public static class ParkDaycareService
     public static bool WritesBackTo(string? format) => CfruEntity.Recognize(format) is not { } cfru || cfru == CfruEntity.Unbound;
 
     /// <summary>Whether a pickup ends the stay. A refused or failed write keeps it, so the time isn't lost.</summary>
+    /// <summary>Whether the daycare writes only EXP to a Pokémon in <paramref name="format"/> (Unbound), leaving its
+    /// level and stats to the game, which catches up after its next battle.</summary>
+    public static bool WritesExpOnly(string? format) => format == CfruEntity.Unbound;
+
     public static bool GoesInNotebook(DaycarePickup outcome) => outcome == DaycarePickup.Owed;
 
     public static bool EndsStay(DaycarePickup outcome) => outcome is not (DaycarePickup.NotTheSame or DaycarePickup.WriteFailed);

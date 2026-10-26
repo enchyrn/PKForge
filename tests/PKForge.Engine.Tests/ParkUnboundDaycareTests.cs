@@ -130,3 +130,14 @@ internal static class UnboundSessionTestExtensions
         catch (InvalidOperationException) { return null; }
     }
 }
+
+public sealed class ParkExpOnlyTests
+{
+    [Fact]
+    public void Only_Unbound_gets_EXP_only()
+    {
+        Assert.True(ParkDaycareService.WritesExpOnly(PKForge.Engine.RadicalRed.CfruEntity.Unbound));
+        Assert.False(ParkDaycareService.WritesExpOnly("PK3"));
+        Assert.False(ParkDaycareService.WritesExpOnly(null));
+    }
+}

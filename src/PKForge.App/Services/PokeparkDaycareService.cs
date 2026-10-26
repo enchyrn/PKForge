@@ -157,7 +157,7 @@ public sealed class PokeparkDaycareService(PokeparkService park, IBankService ba
 
     /// <summary>Unbound gets EXP only: a party Pokémon shows its new level after its next battle.</summary>
     private static string CatchUp(PokeparkService.ParkSource source, ParkDaycareGrowth growth) =>
-        source.Format == PKForge.Engine.RadicalRed.CfruEntity.Unbound && source.BankId is null && source.Box == -1 && growth.LevelAfter > growth.LevelBefore
+        ParkDaycareService.WritesExpOnly(source.Format) && source.BankId is null && source.Box == -1 && growth.LevelAfter > growth.LevelBefore
             ? " The game shows its new level after its next battle." : "";
 
     /// <summary>Writes <paramref name="exp"/> to the Pokémon behind <paramref name="source"/>, in its Bank entry or its open
