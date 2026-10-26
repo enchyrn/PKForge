@@ -10,8 +10,8 @@
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
     <ApplicationId>io.github.gabzidevs.pkforge</ApplicationId>
     <ApplicationTitle>PKForge Fork</ApplicationTitle>
-    <ApplicationVersion>315</ApplicationVersion>
-    <ApplicationDisplayVersion>3.1.1-fork.4</ApplicationDisplayVersion>
+    <ApplicationVersion>316</ApplicationVersion>
+    <ApplicationDisplayVersion>3.1.1-fork.5</ApplicationDisplayVersion>
     <RuntimeIdentifiers>android-arm64</RuntimeIdentifiers>
   </PropertyGroup>
   <PropertyGroup Condition="'$(DiagnosticBuild)' == 'true'">

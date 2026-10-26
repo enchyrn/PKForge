@@ -34,6 +34,12 @@ public static class ParkIdentity
     public static string? InResidentId(string residentId) =>
         residentId.Split(':') is ["save", _, _, _, var last] && !IsLegacyFingerprint(last) ? last : null;
 
+    /// <summary>Who a daycare stay is for: what its save said at check-in, else the resident's own identity (kept
+    /// when it was sent), else the one its id carries. A stay checked in while its save was closed used to record
+    /// nothing, and its pickup then refused every Pokémon as "not the one you left".</summary>
+    public static string? ForStay(string? recorded, string? residentIdentity, string residentId) =>
+        recorded ?? residentIdentity ?? InResidentId(residentId);
+
     /// <summary>Stays and residents recorded before identities were kept a SHA-256 of the whole
     /// Pokémon: 64 hex digits, which no identity key is.</summary>
     public static bool IsLegacyFingerprint(string recorded) =>

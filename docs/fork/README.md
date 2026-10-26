@@ -35,11 +35,14 @@ Personal fork of [PKForge](https://github.com/sofianeelhor/PKForge) at https://g
 - **ROM hack Pokémon can be sent.** Send to Poképark asked the save for the Pokémon's met info to rule out eggs; Unbound and the other CFRU sessions don't support met info, so the send threw and nothing arrived. The egg flag is read from the record itself now (`ParkIdentity.IsEgg`), and the park's lookups tolerate a session that can't answer.
 - **A pickup waits for its save.** Picking a resident up while its save isn't open in PKForge used to end the stay with nothing written ("stays a park memory"). Now Blissey keeps it until the save is open (`ParkDaycareService.WaitsForSave`), so the time counts.
 - **Leaving keeps the memories.** "Leave park" and "Empty park" no longer delete a resident's care (needs, bond); the park remembers who left (`ParkDepartures`, `pkforge.pokepark.departed.v1`, the newest 200). Sending the same Pokémon back restores it under its old id, so its care, bond, dialogue and friendships are its own again. Releasing a Pokémon or deleting its Bank entry still forgets it.
-- Tests: `tests/PKForge.Engine.Tests/ParkIdentityTests.cs`. The App wiring is compile-checked by CI only.
+- **A stay checked in with its save closed still knows its Pokémon.** Check-in recorded the identity only from an open save, so a stay begun from the park alone recorded nothing and its pickup refused every Pokémon as "not the one you left". A stay now falls back to the resident's own identity, kept when it was sent (`ParkIdentity.ForStay`), for new and existing stays alike.
+- **A refused or failed write keeps the stay** (`ParkDaycareService.EndsStay`): "not the one you left", a Bank entry that couldn't be updated or a save that couldn't be written now leave the stay in place, so the time isn't lost and it can be picked up again.
+- **CFRU hacks' stays end as a park memory** (`ParkDaycareService.WritesBackTo`). Their EXP would have been reckoned on Gen 3's growth curves and written through PKHeX, which can't write those saves; writing EXP back to Unbound is a roadmap item.
+- Tests: `tests/PKForge.Engine.Tests/ParkIdentityTests.cs`, `ParkPickupTests.cs`. The App wiring is compile-checked by CI only.
 
 **Fork identity**
 
-- `src/PKForge.App/PKForge.App.csproj`: app ID `io.github.gabzidevs.pkforge` (diagnostic build `...pkforge.debug`, titled "PKForge Fork Diagnostics"), title "PKForge Fork", version `3.1.1-fork.4`, version code `315`.
+- `src/PKForge.App/PKForge.App.csproj`: app ID `io.github.gabzidevs.pkforge` (diagnostic build `...pkforge.debug`, titled "PKForge Fork Diagnostics"), title "PKForge Fork", version `3.1.1-fork.5`, version code `316`.
 - The repo moved from `gabzidevs/PKForge` to `enchyrn/PKForge` on 2026-10-26 (GitHub redirects the old URLs). The app ID keeps `gabzidevs`: changing it would make Android treat the fork as a new app, unable to update the installed one.
 - `AndroidManifest.xml` no longer hard-codes `android:label`; the build writes `ApplicationTitle` there.
 - `AppUpdateService` checks `https://api.github.com/repos/enchyrn/PKForge/releases/latest`. Its broadcast action/extra names use the fork's ID so the two installed apps never answer each other.

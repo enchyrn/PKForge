@@ -23,6 +23,21 @@ public enum DaycarePace { Off, Slow, Gentle, Original }
 /// moves and evolution left alone (as in the games). Eggs are PKHeX egg encounters, made for the
 /// trainer who left the mother and checked for legality.
 /// </summary>
+/// <summary>How a daycare pickup went.</summary>
+public enum DaycarePickup
+{
+    /// <summary>The EXP went into its save or Bank entry.</summary>
+    Written,
+    /// <summary>Nothing to write: no EXP earned, or a game whose daycare doesn't train.</summary>
+    NothingToWrite,
+    /// <summary>The time stays a park memory: writing back is off, its save isn't open, or its game can't be written yet.</summary>
+    ParkMemory,
+    /// <summary>The Pokémon in its save isn't the one that checked in.</summary>
+    NotTheSame,
+    /// <summary>The write was tried and failed.</summary>
+    WriteFailed,
+}
+
 public static class ParkDaycareService
 {
     public static ParkDaycareRules RulesFor(PKM pk) => pk.Context switch
@@ -66,6 +81,13 @@ public static class ParkDaycareService
     /// isn't open. Picking it up then would end the stay with nothing written, losing the time it spent here.</summary>
     public static bool WaitsForSave(bool fromSave, bool saveOpen, bool writesBack, DaycarePace pace) =>
         fromSave && !saveOpen && writesBack && pace != DaycarePace.Off;
+
+    /// <summary>Whether a stay's EXP can be written back to a Pokémon in <paramref name="format"/>. Not a CFRU hack's
+    /// (Unbound, Radical Red, GS Chronicles) yet: its growth curves are its own, and its saves aren't PKHeX's.</summary>
+    public static bool WritesBackTo(string? format) => RadicalRed.CfruEntity.Recognize(format) is null;
+
+    /// <summary>Whether a pickup ends the stay. A refused or failed write keeps it, so the time isn't lost.</summary>
+    public static bool EndsStay(DaycarePickup outcome) => outcome is not (DaycarePickup.NotTheSame or DaycarePickup.WriteFailed);
 
     public static uint ExpForStay(byte[] data, string? format, TimeSpan stay, DaycarePace pace) =>
         EntityBytes.Parse(data, format) is { } pk ? ExpForStay(pk, stay, pace) : 0;
