@@ -335,7 +335,7 @@ public sealed class PokeparkPage : ContentPage, IPadHandler, IPadStickHandler
         // The persisted roster is cheap and gives the first paint immediately.
         // Initialization only scans on first use and refreshes this view afterwards.
         Reload();
-        _ = LoadParkAsync();
+        _ = OfferKeepsakeThenLoadAsync();
         UpdateMusic();
         // A park can be opened from the widget/deep link without passing through
         // HomePage. Ensure Thor's lower display is alive and observing the journal.
@@ -359,6 +359,7 @@ public sealed class PokeparkPage : ContentPage, IPadHandler, IPadStickHandler
     {
         SaveCare();
         _offlineJournal.MarkCurrent();
+        _ = Keepsake?.WriteAsync();
         _active = false; _timer.Stop(); _clock.Stop();
         _secondaryShowCts?.Cancel();
         _secondaryShowCts?.Dispose();
@@ -421,6 +422,37 @@ public sealed class PokeparkPage : ContentPage, IPadHandler, IPadStickHandler
             parties.Add((mon, line));
         }
         return parties;
+    }
+
+    private static ParkKeepsakeService? Keepsake => IPlatformApplication.Current?.Services.GetService<ParkKeepsakeService>();
+
+    /// <summary>A fresh app (no park, no Bank) with a keepsake in a linked folder is asked first, before the park fills
+    /// itself: restoring puts the park and Bank back and closes PKForge so they load as they were.</summary>
+    private async Task OfferKeepsakeThenLoadAsync()
+    {
+        if (Keepsake is { } service && await service.FindForEmptyAppAsync() is { } keepsake)
+        {
+            var when = keepsake.SavedAt.LocalDateTime.ToString("d MMM yyyy, HH:mm", System.Globalization.CultureInfo.InvariantCulture);
+            var choice = await PadMenu.ShowAsync(_host, "Bring back your Poképark?",
+                $"A keepsake from {when} holds {keepsake.Residents} residents and {keepsake.BankEntries} Bank entries.",
+                "Bring it back", "Start a new park");
+            if (choice == "Bring it back")
+            {
+                try
+                {
+                    ParkKeepsakeService.Restore(keepsake);
+                    await PadMenu.ShowAsync(_host, "Welcome back", "Your Poképark and Bank are restored. PKForge closes now: open it again to see them.", "OK");
+                    Application.Current?.Quit();
+                    return;
+                }
+                catch (Exception error) when (error is IOException or FormatException or InvalidOperationException)
+                {
+                    AppLog.Warn("keepsake", $"Restoring: {error.Message}");
+                    await PadMenu.ShowAsync(_host, "Couldn't restore", $"The keepsake couldn't be restored: {error.Message}", "OK");
+                }
+            }
+        }
+        await LoadParkAsync();
     }
 
     private async Task LoadParkAsync()
@@ -584,7 +616,7 @@ public sealed class PokeparkPage : ContentPage, IPadHandler, IPadStickHandler
                 _ => "Save + Bank"
             };
             var options = new List<string> { "Today's goals", "Photo album", "Daycare", "How to play", "Park journal", "Time and weather", "Music", "Treasures",
-                "Auto-fill mode", "Invite Pokémon", "Empty park", "Widget help", "Credits", _scene.ShowCaptions ? "Captions: On" : "Captions: Off",
+                "Auto-fill mode", "Invite Pokémon", "Empty park", "Save keepsake now", "Widget help", "Credits", _scene.ShowCaptions ? "Captions: On" : "Captions: Off",
                 ParkCanvas.UsesGpu ? "Drawing: GPU" : "Drawing: CPU" };
 #if DIAGNOSTIC
             // Frame times over the park, for measuring on a device.
@@ -607,6 +639,11 @@ public sealed class PokeparkPage : ContentPage, IPadHandler, IPadStickHandler
             if (choice is "Show performance" or "Hide performance") _scene.ShowPerformance = choice == "Show performance";
             if (choice == "Park journal")
                 await ShowJournalAsync();
+            if (choice == "Save keepsake now" && Keepsake is { } keepsakeService)
+            {
+                SaveCare();
+                await PokeparkCardOverlay.ShowDialogueAsync(_host, "Keepsake", await keepsakeService.WriteAsync(forced: true));
+            }
             if (choice == "Photo album")
                 await PokeparkAlbumOverlay.ShowAsync(_host);
             if (choice == "Auto-fill mode")

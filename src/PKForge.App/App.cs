@@ -9,6 +9,8 @@ public sealed class App : Application
     {
         Suspended?.Invoke();
         Music?.PauseForBackground();
+        // The park keepsake: a copy outside the app, at most once a minute.
+        if (IPlatformApplication.Current?.Services.GetService<Services.ParkKeepsakeService>() is { } keepsake) _ = keepsake.WriteAsync();
         base.OnSleep();
     }
 

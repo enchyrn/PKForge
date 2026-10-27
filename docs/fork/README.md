@@ -42,9 +42,17 @@ Personal fork of [PKForge](https://github.com/sofianeelhor/PKForge) at https://g
 - **Blissey's notebook** (`ParkNotebook`, in the daycare's state). A stay that ends without its EXP written, because its save isn't open or its game can't be written yet, goes in the notebook (`DaycarePickup.Owed`) with its hours and pace, instead of being lost. Blissey's menu shows the notebook; with a Pokémon's save (or Bank entry) open, she settles its notes: the EXP is reckoned on the Pokémon as it is then and written to the same individual. A note whose Pokémon isn't the one that stayed, or whose write fails, stays owed. With writing back off nothing is owed: the time stays a park memory, as chosen. Settled notes stay as a record (the newest 100); owed ones are never dropped.
 - Tests: `tests/PKForge.Engine.Tests/ParkIdentityTests.cs`, `ParkPickupTests.cs`, `ParkUnboundDaycareTests.cs` (two against a real Unbound save in the gitignored `.local-testdata/unbound-fork-tyran.srm`, skipped without it), `ParkNotebookTests.cs`. The App wiring is compile-checked by CI only.
 
-**Fork identity**
+**Park keepsake** (2026-10-28, `ParkKeepsakeFormat` in `src/PKForge.Domain/ParkKeepsake.cs`, `ParkKeepsakeService`)
 
-- `src/PKForge.App/PKForge.App.csproj`: app ID `io.github.gabzidevs.pkforge` (diagnostic build `...pkforge.debug`, titled "PKForge Fork Diagnostics"), title "PKForge Fork", version `3.1.1-fork.6`, version code `317`.
+- The Poképark lived only in the app's preferences and the Bank in its private folder, so an uninstall, a new phone or a new app ID lost both. Now PKForge keeps a copy outside the app: every `pkforge.pokepark.*` preference (read from Android's store with its type, so run-time keys like birthday flags come too) and the Bank's own files (so Bank residents keep their ids), in the first linked saves folder.
+- Five rotating copies, `pkforge-keepsake-1.json` to `-5.json`, in the folder's root (the folder access can't make subfolders or rename). Each write replaces only the oldest or an unreadable copy, and each carries a SHA-256 of its payload, so a cut-off write is ignored and the others still restore. The save scanner ignores `.json`.
+- Written when the Poképark closes or the app goes to the background, at most once a minute, and from Poképark options > Save keepsake now. An app with no park and no Bank writes nothing, so a fresh install can't push a real park's copies out.
+- Restore is offered only to an app with no park roster and no Bank, when the Poképark opens, before it fills itself: link the saves folder first, then open the Poképark. Restoring writes the preferences and Bank files back and closes PKForge, to be opened again. It never merges.
+- Tests: `tests/PKForge.Domain.Tests/ParkKeepsakeTests.cs`. The Android preference access is compile-checked by CI only.
+
+
+
+- `src/PKForge.App/PKForge.App.csproj`: app ID `io.github.gabzidevs.pkforge` (diagnostic build `...pkforge.debug`, titled "PKForge Fork Diagnostics"), title "PKForge Fork", version `3.1.1-fork.7`, version code `318`.
 - The repo moved from `gabzidevs/PKForge` to `enchyrn/PKForge` on 2026-10-26 (GitHub redirects the old URLs). The app ID keeps `gabzidevs`: changing it would make Android treat the fork as a new app, unable to update the installed one.
 - `AndroidManifest.xml` no longer hard-codes `android:label`; the build writes `ApplicationTitle` there.
 - `AppUpdateService` checks `https://api.github.com/repos/enchyrn/PKForge/releases/latest`. Its broadcast action/extra names use the fork's ID so the two installed apps never answer each other.
