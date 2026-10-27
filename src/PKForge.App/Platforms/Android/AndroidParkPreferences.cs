@@ -6,15 +6,21 @@ namespace PKForge.App.Platforms.Android;
 /// <summary>
 /// The Poképark's preferences, read and written straight from Android's store so keys built at run time
 /// (a resident's birthday flag) come along, each with the type it was stored as. MAUI's <c>Preferences.Default</c>
-/// is Android's default shared preferences.
+/// is Android's default shared preferences, <c>&lt;package&gt;_preferences</c>.
 /// </summary>
 internal static class AndroidParkPreferences
 {
-#pragma warning disable CS0618 // MAUI itself reads the default shared preferences through this API.
-    private static ISharedPreferences Store =>
-        global::Android.Preferences.PreferenceManager.GetDefaultSharedPreferences(global::Android.App.Application.Context)
-        ?? throw new InvalidOperationException("Android's preferences are unavailable.");
-#pragma warning restore CS0618
+// Android's default shared preferences (what PreferenceManager.GetDefaultSharedPreferences opens, now deprecated):
+    // the file "<package>_preferences".
+    private static ISharedPreferences Store
+    {
+        get
+        {
+            var context = global::Android.App.Application.Context;
+            return context.GetSharedPreferences($"{context.PackageName}_preferences", FileCreationMode.Private)
+                ?? throw new InvalidOperationException("Android's preferences are unavailable.");
+        }
+    }
 
     public static IReadOnlyList<KeepsakePreference> ReadPark()
     {

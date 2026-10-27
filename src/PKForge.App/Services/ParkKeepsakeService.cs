@@ -24,7 +24,7 @@ public sealed class ParkKeepsakeService(IFolderFileAccess files, IWatchedRootSto
         catch (System.Text.Json.JsonException) { return 0; }
     }
 
-    /// <summary>Writes a copy when one is due (or <paramref name="now"/> forced). Returns what happened, for the player.</summary>
+    /// <summary>Writes a copy when one is due, or now when <paramref name="forced"/>. Returns what happened, for the player.</summary>
     public async Task<string> WriteAsync(bool forced = false)
     {
         if (!await _gate.WaitAsync(0).ConfigureAwait(false)) return "A keepsake is already being written.";
